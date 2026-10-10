@@ -1,0 +1,2 @@
+-- Coloca aqui los scripts DDL (ej. 01_schema.sql). Se ejecutan en orden alfabetico
+-- solo la primera vez que se crea el volumen mysql_data.

@@ -1,0 +1,94 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: medreminder-mysql
+    restart: unless-stopped
+    command: ["--default-time-zone=+00:00", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/mysql/init:/docker-entrypoint-initdb.d:ro   # scripts DDL (.sql) se ejecutan en la 1a inicializacion
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    container_name: medreminder-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    container_name: medreminder-api
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MONGO_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
+      MONGO_DB: ${MONGO_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      TZ: UTC
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/code/app   # hot-reload en desarrollo
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
+  # --- Herramientas de administracion (SOLO desarrollo) ---
+  adminer:
+    image: adminer:4
+    container_name: medreminder-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysql
+    profiles: ["tools"]
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: medreminder-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8082:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  mysql_data:
+  mongo_data:
