@@ -8,6 +8,7 @@ from app.models.medicamento import Medicamento
 from app.models.tratamiento import Tratamiento
 from app.models.usuario import Usuario
 from app.schemas.tratamiento import TratamientoCreate, TratamientoOut
+from app.services.recordatorio_service import generar_recordatorios
 
 router = APIRouter(prefix="/tratamientos", tags=["tratamientos"])
 
@@ -41,6 +42,11 @@ def crear_tratamiento(
     campos = data.model_dump(exclude_none=True)  # fecha_inicio omitida -> default de MySQL
     trat = Tratamiento(**campos)
     db.add(trat)
+    # flush + refresh: obtiene id_tratamiento y la fecha_inicio real (default de MySQL)
+    # sin cerrar la transaccion; tratamiento y recordatorios se confirman juntos o ninguno.
+    db.flush()
+    db.refresh(trat)
+    db.add_all(generar_recordatorios(trat))
     db.commit()
     db.refresh(trat)
     return trat
