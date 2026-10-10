@@ -1,0 +1,11 @@
+fastapi==0.115.*
+uvicorn[standard]==0.30.*
+sqlalchemy==2.0.*
+pymysql==1.1.*
+cryptography==43.*
+pymongo==4.8.*
+passlib[bcrypt]==1.7.4
+# passlib 1.7.4 es incompatible con bcrypt >= 4.1 (lee bcrypt.__about__); fijar version.
+bcrypt==4.0.1
+PyJWT==2.9.*
+email-validator==2.2.*
