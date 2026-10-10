@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TratamientoCreate(BaseModel):
@@ -11,6 +11,14 @@ class TratamientoCreate(BaseModel):
     fecha_inicio: datetime | None = None
     fecha_fin: datetime | None = None
     estado: Literal["activo", "inactivo"] = "activo"
+
+    @field_validator("fecha_inicio", "fecha_fin")
+    @classmethod
+    def _a_utc_naive(cls, v: datetime | None) -> datetime | None:
+        # Con zona horaria -> convertir a UTC; sin zona -> se asume UTC.
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
     @model_validator(mode="after")
     def _rango_fechas(self):
