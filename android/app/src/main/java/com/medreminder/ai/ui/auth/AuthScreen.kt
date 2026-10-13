@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.medreminder.ai.ui.components.MedBrandLogo
 import com.medreminder.ai.ui.theme.AppBackground
 import com.medreminder.ai.ui.theme.CardBackground
 import com.medreminder.ai.ui.theme.InputBorderColor
@@ -171,20 +172,7 @@ private fun RegisterTopBar(onBack: () -> Unit) {
                     tint = TextPrimary
                 )
             }
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = TealSoftBg,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Outlined.MedicalServices,
-                        contentDescription = null,
-                        tint = TealPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            MedBrandLogo(size = 36.dp, cornerRadius = 10.dp)
             Spacer(Modifier.width(12.dp))
             Text(
                 text = "Registrar Medicamento",
@@ -239,20 +227,7 @@ private fun LoginContent(
             modifier = Modifier.size(88.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = TealSoftBg,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Outlined.MedicalServices,
-                            contentDescription = "Logo MedReminder",
-                            tint = TealPrimary,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-                }
+                MedBrandLogo(size = 64.dp, cornerRadius = 18.dp)
             }
         }
 

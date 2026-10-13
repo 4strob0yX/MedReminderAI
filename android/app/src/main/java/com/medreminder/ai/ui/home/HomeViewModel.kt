@@ -19,7 +19,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-enum class HomeTab { HOY, MI_BOTIQUIN }
+enum class HomeTab { HOY, MI_BOTIQUIN, ANALISIS_DFS }
 
 enum class FormaFarmaceutica(val label: String) {
     COMPRIMIDOS("Comprimidos / Cápsulas"),
