@@ -7,3 +7,6 @@ build/
 local.properties
 .idea/
 docs/
+busquedas/
+.DS_Store
+*.rar

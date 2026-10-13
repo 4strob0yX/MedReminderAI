@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.medreminder.ai.ui.components.MedBrandLogo
 import com.medreminder.ai.ui.theme.AlertRedText
 import com.medreminder.ai.ui.theme.AppBackground
 import com.medreminder.ai.ui.theme.CardBackground
@@ -111,20 +112,7 @@ fun NuevoMedicamentoScreen(
                             tint = TextPrimary
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = TealSoftBg,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.MedicalServices,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    MedBrandLogo(size = 36.dp, cornerRadius = 10.dp)
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = "Registrar Medicamento",

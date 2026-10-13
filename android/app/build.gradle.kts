@@ -18,8 +18,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // 10.0.2.2 = localhost del host visto desde el emulador
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
+        // Con adb reverse tcp:8000 tcp:8000, 127.0.0.1:8000 funciona directo y al instante
+        // tanto en el emulador como en un telefono Android fisico por USB-C.
+        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8000/\"")
     }
 
     buildTypes {

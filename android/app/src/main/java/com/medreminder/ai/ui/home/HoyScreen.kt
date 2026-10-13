@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessAlarm
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EditNote
@@ -63,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.medreminder.ai.ui.components.MedBrandLogo
 import com.medreminder.ai.ui.theme.AlertRedBg
 import com.medreminder.ai.ui.theme.AlertRedText
 import com.medreminder.ai.ui.theme.AppBackground
@@ -124,7 +126,11 @@ fun HomeRoute(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             ClinicalBrandTopBar(
-                subtitle = if (state.selectedTab == HomeTab.HOY) "Hoy" else "Mi Botiquín",
+                subtitle = when (state.selectedTab) {
+                    HomeTab.HOY -> "Hoy"
+                    HomeTab.MI_BOTIQUIN -> "Mi Botiquín"
+                    HomeTab.ANALISIS_DFS -> "Análisis y Búsqueda DFS"
+                },
                 onProfileClick = onLogout
             )
         },
@@ -150,6 +156,10 @@ fun HomeRoute(
                 HomeTab.MI_BOTIQUIN -> BotiquinScreenContent(
                     state = state,
                     onAddMedicamentoClick = viewModel::onOpenNuevoMedicamento
+                )
+
+                HomeTab.ANALISIS_DFS -> AnalisisDfsScreenContent(
+                    state = state
                 )
             }
 
@@ -180,20 +190,7 @@ fun ClinicalBrandTopBar(
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = TealSoftBg,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Outlined.MedicalServices,
-                        contentDescription = null,
-                        tint = TealPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
+            MedBrandLogo(size = 40.dp, cornerRadius = 11.dp)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -246,8 +243,8 @@ fun ClinicalBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BottomNavPill(
@@ -259,9 +256,16 @@ fun ClinicalBottomBar(
                 )
                 BottomNavPill(
                     selected = selectedTab == HomeTab.MI_BOTIQUIN,
-                    label = "Mi Botiquín",
+                    label = "Botiquín",
                     icon = Icons.Outlined.MedicalInformation,
                     onClick = { onSelectTab(HomeTab.MI_BOTIQUIN) },
+                    modifier = Modifier.weight(1f)
+                )
+                BottomNavPill(
+                    selected = selectedTab == HomeTab.ANALISIS_DFS,
+                    label = "Análisis",
+                    icon = Icons.Outlined.AccountTree,
+                    onClick = { onSelectTab(HomeTab.ANALISIS_DFS) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -286,7 +290,7 @@ private fun BottomNavPill(
             .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -294,14 +298,16 @@ private fun BottomNavPill(
                 imageVector = icon,
                 contentDescription = label,
                 tint = if (selected) Color.White else TextPrimary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = label,
-                fontSize = 15.sp,
+                fontSize = 13.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (selected) Color.White else TextPrimary
+                color = if (selected) Color.White else TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -659,20 +665,7 @@ fun ConfirmacionTomaModal(
                             tint = TextPrimary
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = TealSoftBg,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.MedicalServices,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    MedBrandLogo(size = 36.dp, cornerRadius = 10.dp)
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = "Confirmación De Toma",
