@@ -37,4 +37,5 @@ class NetworkModule(private val tokenStore: TokenStore) {
         .build()
 
     val authApi: AuthApi = retrofit.create(AuthApi::class.java)
+    val medApi: MedApi = retrofit.create(MedApi::class.java)
 }

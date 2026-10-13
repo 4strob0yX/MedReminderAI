@@ -42,6 +42,11 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         AuthUiState(mode = if (it.mode == AuthMode.LOGIN) AuthMode.REGISTER else AuthMode.LOGIN, email = it.email)
     }
 
+    fun logout() {
+        repository.logout()
+        _state.value = AuthUiState(isAuthenticated = false)
+    }
+
     fun onSubmit() {
         val s = _state.value
         if (s.isLoading || !validate(s)) return

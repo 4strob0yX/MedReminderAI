@@ -4,18 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.medreminder.ai.ui.theme.MedReminderAITheme
-
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.medreminder.ai.ui.auth.AuthRoute
 import com.medreminder.ai.ui.auth.AuthViewModel
+import com.medreminder.ai.ui.home.HomeRoute
+import com.medreminder.ai.ui.home.HomeViewModel
+import com.medreminder.ai.ui.theme.MedReminderAITheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,32 +22,28 @@ class MainActivity : ComponentActivity() {
         val authViewModel: AuthViewModel by viewModels {
             AuthViewModel.Factory(appContainer.authRepository)
         }
+        val homeViewModel: HomeViewModel by viewModels {
+            HomeViewModel.Factory(appContainer.medRepository)
+        }
 
         setContent {
             MedReminderAITheme {
-                AuthRoute(
-                    viewModel = authViewModel,
-                    onAuthenticated = {
-                        // Navegación a Home pendiente de directiva
-                    }
-                )
+                val authState by authViewModel.state.collectAsState()
+
+                if (authState.isAuthenticated) {
+                    HomeRoute(
+                        viewModel = homeViewModel,
+                        onLogout = { authViewModel.logout() }
+                    )
+                } else {
+                    AuthRoute(
+                        viewModel = authViewModel,
+                        onAuthenticated = {
+                            homeViewModel.cargarDatos()
+                        }
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    MedReminderAITheme {
-        Greeting("Android")
     }
 }
