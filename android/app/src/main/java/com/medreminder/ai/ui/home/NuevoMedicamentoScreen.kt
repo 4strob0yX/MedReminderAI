@@ -22,20 +22,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.AccessAlarm
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.MedicalInformation
-import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Scale
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Vaccines
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,13 +46,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.ui.components.MedBrandLogo
 import com.medreminder.ai.ui.theme.AlertRedText
 import com.medreminder.ai.ui.theme.AppBackground
@@ -76,10 +81,6 @@ import com.medreminder.ai.ui.theme.TextMuted
 import com.medreminder.ai.ui.theme.TextPrimary
 import com.medreminder.ai.ui.theme.TextSecondary
 
-/**
- * Pantalla 5: Registrar Medicamento (Formulario clínico con Forma farmacéutica,
- * Nombre, Dosis con chips de sugerencia, Frecuencia con chips, Stock +/- y Guardar).
- */
 @Composable
 fun NuevoMedicamentoScreen(
     form: NuevoMedicamentoFormState,
@@ -87,11 +88,15 @@ fun NuevoMedicamentoScreen(
     onBack: () -> Unit,
     onFormaChange: (FormaFarmaceutica) -> Unit,
     onNombreChange: (String) -> Unit,
+    onSelectCatalogoSugerencia: (MedicamentoCatalogoItemDto) -> Unit,
     onDosisChange: (String) -> Unit,
     onFrecuenciaTextoChange: (String) -> Unit,
     onSelectFrecuenciaChip: (Int, String) -> Unit,
     onStockTextoChange: (String) -> Unit,
     onIncrementStock: (Int) -> Unit,
+    onTogglePermitePosponer: (Boolean) -> Unit,
+    onToggleEsCritico: (Boolean) -> Unit,
+    onContraindicacionesChange: (String) -> Unit,
     onGuardar: () -> Unit
 ) {
     Scaffold(
@@ -147,7 +152,7 @@ fun NuevoMedicamentoScreen(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Tarjeta de encabezado "REGISTRO CLÍNICO - Nuevo Medicamento"
+            // 1. Tarjeta Encabezado
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -211,7 +216,7 @@ fun NuevoMedicamentoScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Ingresa los datos del envase o receta médica para sincronizar alertas.",
+                            text = "Escribe el nombre para autocompletar desde el catálogo médico y verificar alergias.",
                             fontSize = 14.sp,
                             color = TextSecondary,
                             lineHeight = 20.sp
@@ -220,7 +225,47 @@ fun NuevoMedicamentoScreen(
                 }
             }
 
-            // 2. Tarjeta Forma farmacéutica
+            // 2. Alerta de Alergia detectada
+            if (form.alertaAlergia != null) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFFFEBEE),
+                        border = BorderStroke(1.5.dp, Color(0xFFD32F2F)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFD32F2F),
+                                modifier = Modifier.size(26.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "ALERTA DE ALERGIA / CONTRAINDICACIÓN",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFB71C1C)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = form.alertaAlergia,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFC62828),
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Forma farmacéutica
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -292,7 +337,7 @@ fun NuevoMedicamentoScreen(
                 }
             }
 
-            // 3. Tarjeta Nombre del medicamento (* Requerido)
+            // 4. Nombre del medicamento + AUTOCOMPLETADO
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -322,25 +367,185 @@ fun NuevoMedicamentoScreen(
                                 )
                             }
                             Text(
-                                text = "* Requerido",
+                                text = "* Autocompletado",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = AlertRedText
+                                color = TealPrimary
                             )
                         }
                         Spacer(Modifier.height(12.dp))
                         SoftCardInputField(
                             value = form.nombre,
                             onValueChange = onNombreChange,
-                            placeholder = "ej. Ibuprofeno, Paracetamol",
+                            placeholder = "ej. Paracetamol, Amoxicilina, Ibuprofeno...",
                             error = form.nombreError,
                             enabled = !form.isSubmitting
+                        )
+
+                        // Desplegable de sugerencias de autocompletado
+                        if (form.catalogoSugerencias.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color(0xFFF7FAFA),
+                                border = BorderStroke(1.dp, TealSoftBg),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = "SUGERENCIAS CLÍNICAS (TOCA PARA APLICAR):",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = TealDark,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    form.catalogoSugerencias.take(4).forEach { item ->
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color.White,
+                                            border = BorderStroke(1.dp, Color(0xFFE8ECEB)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { onSelectCatalogoSugerencia(item) }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Medication,
+                                                    contentDescription = null,
+                                                    tint = TealPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = item.nombre,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 13.5.sp,
+                                                        color = TextPrimary
+                                                    )
+                                                    Text(
+                                                        text = "Activo: ${item.principioActivo} • ${item.dosisSugerida}",
+                                                        fontSize = 11.5.sp,
+                                                        color = TextSecondary
+                                                    )
+                                                }
+                                                if (item.esCriticoDefecto) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = Color(0xFFFFEBEE)
+                                                    ) {
+                                                        Text(
+                                                            text = "CRÍTICO",
+                                                            color = Color(0xFFD32F2F),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. Contraindicaciones conocidas del fármaco
+            if (form.contraindicaciones.isNotBlank()) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color(0xFFFFF8E1),
+                        border = BorderStroke(1.dp, Color(0xFFFFE082)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = null,
+                                tint = Color(0xFFF57F17),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Contraindicaciones clínicas conocidas",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFE65100)
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    text = form.contraindicaciones,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF5D4037),
+                                    lineHeight = 17.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Medicamento Crítico / Imposible de Posponer (Toggle Clínico)
+            item {
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = if (form.esCritico) Color(0xFFFFF5F5) else CardBackground,
+                    border = BorderStroke(1.5.dp, if (form.esCritico) Color(0xFFE57373) else InputBorderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (form.esCritico) Color(0xFFFFCDD2) else TealSoftBg,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (form.esCritico) Icons.Outlined.NotificationImportant else Icons.Outlined.AccessAlarm,
+                                    contentDescription = null,
+                                    tint = if (form.esCritico) Color(0xFFD32F2F) else TealDark,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Medicamento crítico",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (form.esCritico) Color(0xFFB71C1C) else TextPrimary
+                            )
+                            Text(
+                                text = if (form.esCritico) "Dosis estricta: IMPOSIBLE posponer (+30m)" else "Permite posponer la toma si es necesario",
+                                fontSize = 12.sp,
+                                color = if (form.esCritico) Color(0xFFD32F2F) else TextSecondary
+                            )
+                        }
+                        Switch(
+                            checked = form.esCritico,
+                            onCheckedChange = { onToggleEsCritico(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFD32F2F)
+                            )
                         )
                     }
                 }
             }
 
-            // 4. Tarjeta Dosis + chips de sugerencia ("500 mg", "1 comp.", "10 ml")
+            // 7. Dosis + chips
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -403,7 +608,7 @@ fun NuevoMedicamentoScreen(
                 }
             }
 
-            // 5. Tarjeta Frecuencia + chips ("Cada 8h", "Cada 12h", "1 vez al día")
+            // 8. Frecuencia
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -457,7 +662,7 @@ fun NuevoMedicamentoScreen(
                 }
             }
 
-            // 6. Tarjeta Cantidad Inicial en envase + Stepper (- / +)
+            // 9. Cantidad inicial
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
@@ -536,44 +741,7 @@ fun NuevoMedicamentoScreen(
                 }
             }
 
-            // 7. Banner Recordatorios inteligentes
-            item {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = SoftWarmSurface,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Shield,
-                            contentDescription = null,
-                            tint = TealPrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Recordatorios inteligentes",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                text = "Calcularemos el reabastecimiento automáticamente con base en tu posología programada.",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                lineHeight = 18.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 8. Botón Guardar Medicamento (>= 56dp)
+            // 10. Botón Guardar
             item {
                 Button(
                     onClick = onGuardar,
@@ -606,7 +774,6 @@ fun NuevoMedicamentoScreen(
                         )
                     }
                 }
-                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -620,9 +787,10 @@ private fun FormaToggleButton(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) TealPrimary else Color.Transparent,
+        color = if (selected) Color.White else Color.Transparent,
+        border = if (selected) BorderStroke(1.dp, InputBorderColor) else null,
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
     ) {
@@ -630,55 +798,7 @@ private fun FormaToggleButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else TextPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SuggestionChipPill(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = if (selected) TealPrimary else TealBadgeBg,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .clickable { onClick() }
-    ) {
-        Text(
-            text = text,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) Color.White else TealBadgeText,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-        )
-    }
-}
-
-@Composable
-private fun StockStepperButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CardBackground,
-        modifier = Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = TextPrimary,
+                tint = if (selected) TealDark else TextSecondary,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -702,32 +822,82 @@ private fun SoftCardInputField(
                 Text(
                     text = placeholder,
                     color = TextMuted,
-                    fontSize = 15.sp
+                    fontSize = 14.sp
                 )
             },
             singleLine = true,
             enabled = enabled,
-            isError = error != null,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             shape = RoundedCornerShape(16.dp),
+            isError = error != null,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = SoftWarmSurface,
                 unfocusedContainerColor = SoftWarmSurface,
                 disabledContainerColor = SoftWarmSurface,
                 focusedBorderColor = TealPrimary,
                 unfocusedBorderColor = Color.Transparent,
-                disabledBorderColor = Color.Transparent
+                errorBorderColor = AlertRedText
             ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
+            modifier = Modifier.fillMaxWidth()
         )
         if (error != null) {
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = error,
-                color = MaterialTheme.colorScheme.error,
+                color = AlertRedText,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionChipPill(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) TealDark else SoftWarmSurface,
+        border = if (selected) null else BorderStroke(1.dp, InputBorderColor),
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.5.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (selected) Color.White else TextPrimary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+        )
+    }
+}
+
+@Composable
+private fun StockStepperButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, InputBorderColor),
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = TextPrimary,
+                modifier = Modifier.size(20.dp)
             )
         }
     }

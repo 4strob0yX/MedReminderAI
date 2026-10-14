@@ -1,5 +1,8 @@
 package com.medreminder.ai.ui.home
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,12 +32,16 @@ import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MedicalInformation
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Shield
+import com.medreminder.ai.data.remote.ContactoApoyoDto
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -111,11 +118,15 @@ fun HomeRoute(
             onBack = viewModel::onCloseNuevoMedicamento,
             onFormaChange = viewModel::onFormaChange,
             onNombreChange = viewModel::onNombreMedChange,
+            onSelectCatalogoSugerencia = viewModel::onSelectCatalogoSugerencia,
             onDosisChange = viewModel::onDosisMedChange,
             onFrecuenciaTextoChange = viewModel::onFrecuenciaTextoChange,
             onSelectFrecuenciaChip = viewModel::onSelectFrecuenciaChip,
             onStockTextoChange = viewModel::onStockTextoChange,
             onIncrementStock = viewModel::onIncrementStock,
+            onTogglePermitePosponer = viewModel::onTogglePermitePosponer,
+            onToggleEsCritico = viewModel::onToggleEsCritico,
+            onContraindicacionesChange = viewModel::onContraindicacionesChange,
             onGuardar = viewModel::onGuardarMedicamento
         )
         return
@@ -129,6 +140,7 @@ fun HomeRoute(
                 subtitle = when (state.selectedTab) {
                     HomeTab.HOY -> "Hoy"
                     HomeTab.MI_BOTIQUIN -> "Mi Botiquín"
+                    HomeTab.SALUD_APOYO -> "Alergias y Apoyo"
                     HomeTab.ANALISIS_DFS -> "Análisis y Búsqueda DFS"
                 },
                 onProfileClick = onLogout
@@ -158,6 +170,14 @@ fun HomeRoute(
                     onAddMedicamentoClick = viewModel::onOpenNuevoMedicamento
                 )
 
+                HomeTab.SALUD_APOYO -> SaludApoyoScreenContent(
+                    state = state,
+                    onAgregarAlergia = viewModel::onAgregarAlergia,
+                    onEliminarAlergia = viewModel::onEliminarAlergia,
+                    onGuardarContacto = viewModel::onGuardarContacto,
+                    onEliminarContacto = viewModel::onEliminarContacto
+                )
+
                 HomeTab.ANALISIS_DFS -> AnalisisDfsScreenContent(
                     state = state
                 )
@@ -167,6 +187,7 @@ fun HomeRoute(
             state.selectedTomaForModal?.let { toma ->
                 ConfirmacionTomaModal(
                     toma = toma,
+                    contactosApoyo = state.contactosApoyo,
                     isActionInFlight = state.isActionInFlight,
                     onDismiss = viewModel::onDismissConfirmacionToma,
                     onTomarAhora = viewModel::onTomarAhora,
@@ -259,6 +280,13 @@ fun ClinicalBottomBar(
                     label = "Botiquín",
                     icon = Icons.Outlined.MedicalInformation,
                     onClick = { onSelectTab(HomeTab.MI_BOTIQUIN) },
+                    modifier = Modifier.weight(1f)
+                )
+                BottomNavPill(
+                    selected = selectedTab == HomeTab.SALUD_APOYO,
+                    label = "Apoyo",
+                    icon = Icons.Outlined.HealthAndSafety,
+                    onClick = { onSelectTab(HomeTab.SALUD_APOYO) },
                     modifier = Modifier.weight(1f)
                 )
                 BottomNavPill(
@@ -543,6 +571,34 @@ private fun TomaHoyCard(
                 }
             }
 
+            if (item.esCritico || !item.permitePosponer) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFFEBEE)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.NotificationImportant,
+                            contentDescription = null,
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "DOSIS CRÍTICA • IMPOSIBLE POSPONER",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFC62828),
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(18.dp))
 
             // Botón Registrar Toma (>= 56dp)
@@ -632,6 +688,7 @@ private fun EmptyHoyCard(onNuevoMedClick: () -> Unit) {
 @Composable
 fun ConfirmacionTomaModal(
     toma: TomaHoyItemUi,
+    contactosApoyo: List<ContactoApoyoDto> = emptyList(),
     isActionInFlight: Boolean,
     onDismiss: () -> Unit,
     onTomarAhora: () -> Unit,
@@ -809,7 +866,37 @@ fun ConfirmacionTomaModal(
                             }
                         }
 
-                        Spacer(Modifier.height(22.dp))
+                        // Banner de dosis crítica si no permite posponer
+                        if (toma.esCritico || !toma.permitePosponer) {
+                            Spacer(Modifier.height(12.dp))
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFFFFEBEE),
+                                border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.NotificationImportant,
+                                        contentDescription = null,
+                                        tint = Color(0xFFD32F2F),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Dosis crítica: No se puede posponer. Debe tomarse puntualmente.",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFC62828)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
 
                         // 1. Botón Tomar Ahora (>= 56dp)
                         Button(
@@ -846,33 +933,98 @@ fun ConfirmacionTomaModal(
 
                         Spacer(Modifier.height(12.dp))
 
-                        // 2. Botón Posponer 30 min (>= 56dp)
-                        OutlinedButton(
-                            onClick = onPosponer30Min,
-                            enabled = !isActionInFlight,
-                            shape = RoundedCornerShape(18.dp),
-                            border = BorderStroke(1.dp, InputBorderColor),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = CardBackground,
-                                contentColor = TealPrimary
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 58.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.AccessAlarm,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                text = "Posponer 30 min",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TealPrimary
-                            )
+                        // 2. Botón Posponer 30 min (o Bloqueado si es Crítico)
+                        if (toma.esCritico || !toma.permitePosponer) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color(0xFFFAFAFA),
+                                border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 52.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.NotificationImportant,
+                                        contentDescription = null,
+                                        tint = Color(0xFF9E9E9E),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Posponer Deshabilitado (Crítico)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF757575)
+                                    )
+                                }
+                            }
+
+                            val contactoPrincipal = contactosApoyo.firstOrNull { it.esPrincipal } ?: contactosApoyo.firstOrNull()
+                            if (contactoPrincipal != null) {
+                                Spacer(Modifier.height(10.dp))
+                                val context = LocalContext.current
+                                Button(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                                            data = Uri.parse("tel:${contactoPrincipal.telefono}")
+                                        }
+                                        context.startActivity(intent)
+                                    },
+                                    enabled = !isActionInFlight,
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 52.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Phone,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Llamar a ${contactoPrincipal.nombreCompleto}",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = onPosponer30Min,
+                                enabled = !isActionInFlight,
+                                shape = RoundedCornerShape(18.dp),
+                                border = BorderStroke(1.dp, InputBorderColor),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = CardBackground,
+                                    contentColor = TealPrimary
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 58.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AccessAlarm,
+                                    contentDescription = null,
+                                    tint = TealPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "Posponer 30 min",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TealPrimary
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(8.dp))

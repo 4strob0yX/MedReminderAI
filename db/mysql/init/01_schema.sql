@@ -10,9 +10,37 @@ CREATE TABLE medicamento (
     id_medicamento INT AUTO_INCREMENT PRIMARY KEY,
     id_usuario INT NOT NULL,
     nombre VARCHAR(255) NOT NULL,
+    principio_activo VARCHAR(255) NULL,
     dosis VARCHAR(100) NOT NULL,
     cantidad_stock INT NOT NULL DEFAULT 0,
+    permite_posponer BOOLEAN NOT NULL DEFAULT TRUE,
+    es_critico BOOLEAN NOT NULL DEFAULT FALSE,
+    contraindicaciones TEXT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE
+);
+
+CREATE TABLE alergia_usuario (
+    id_alergia INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    sustancia VARCHAR(255) NOT NULL,
+    severidad ENUM('leve', 'moderada', 'grave') DEFAULT 'grave',
+    reaccion VARCHAR(255) NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    INDEX idx_alergia_usuario (id_usuario)
+);
+
+CREATE TABLE contacto_apoyo (
+    id_contacto INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    nombre_completo VARCHAR(255) NOT NULL,
+    telefono VARCHAR(50) NOT NULL,
+    parentesco VARCHAR(100) NOT NULL,
+    correo VARCHAR(255) NULL,
+    es_principal BOOLEAN DEFAULT TRUE,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    INDEX idx_contacto_usuario (id_usuario)
 );
 
 CREATE TABLE tratamiento (

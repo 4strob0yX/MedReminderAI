@@ -338,6 +338,22 @@ private fun BotiquinMedCard(item: BotiquinItemUi, iconIndex: Int) {
                 }
             }
 
+            if (item.esCritico || !item.permitePosponer) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFFFEBEE)
+                ) {
+                    Text(
+                        text = "🚨 DOSIS CRÍTICA • NO POSPONIBLE",
+                        color = Color(0xFFC62828),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
 
             Row(

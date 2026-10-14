@@ -1,8 +1,11 @@
 package com.medreminder.ai.data.remote
 
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -13,6 +16,12 @@ interface MedApi {
 
     @GET("medicamentos")
     suspend fun listarMedicamentos(): List<MedicamentoDto>
+
+    @GET("medicamentos/catalogo")
+    suspend fun buscarCatalogo(@Query("q") query: String? = null): List<MedicamentoCatalogoItemDto>
+
+    @POST("medicamentos/verificar-alergias")
+    suspend fun verificarAlergias(@Body body: VerificarAlergiasInDto): VerificarAlergiasOutDto
 
     @POST("tratamientos")
     suspend fun crearTratamiento(@Body body: TratamientoCreateDto): TratamientoDto
@@ -31,4 +40,30 @@ interface MedApi {
 
     @POST("recordatorios/{id}/omitir")
     suspend fun omitirRecordatorio(@Path("id") idRecordatorio: Int): RecordatorioDto
+
+    // --- Sistema de Alergias ---
+    @GET("alergias")
+    suspend fun listarAlergias(): List<AlergiaDto>
+
+    @POST("alergias")
+    suspend fun agregarAlergia(@Body body: AlergiaCreateDto): AlergiaDto
+
+    @DELETE("alergias/{id}")
+    suspend fun eliminarAlergia(@Path("id") idAlergia: Int): Response<Unit>
+
+    // --- Contactos de Apoyo / Emergencia ---
+    @GET("contactos-apoyo")
+    suspend fun listarContactos(): List<ContactoApoyoDto>
+
+    @POST("contactos-apoyo")
+    suspend fun agregarContacto(@Body body: ContactoApoyoCreateDto): ContactoApoyoDto
+
+    @PUT("contactos-apoyo/{id}")
+    suspend fun actualizarContacto(
+        @Path("id") idContacto: Int,
+        @Body body: ContactoApoyoCreateDto
+    ): ContactoApoyoDto
+
+    @DELETE("contactos-apoyo/{id}")
+    suspend fun eliminarContacto(@Path("id") idContacto: Int): Response<Unit>
 }
