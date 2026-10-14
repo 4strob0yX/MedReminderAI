@@ -10,5 +10,9 @@ class RecordatorioOut(BaseModel):
     hora_programada: datetime  # UTC
     estado: Literal["pendiente", "tomado", "pospuesto", "omitido"]
     veces_pospuesto: int
+    permite_posponer: bool = True
+    es_critico: bool = False
+    nombre_medicamento: str | None = None
+    dosis: str | None = None
 
     model_config = {"from_attributes": True}
