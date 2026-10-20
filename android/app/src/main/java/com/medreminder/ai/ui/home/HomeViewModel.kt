@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
+import com.medreminder.ai.data.remote.MedicamentoCreateDto
 import com.medreminder.ai.data.remote.MedicamentoDto
 import com.medreminder.ai.data.remote.RecordatorioDto
 import com.medreminder.ai.data.remote.TratamientoDto
@@ -17,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -26,10 +29,29 @@ import java.util.Locale
 
 enum class HomeTab { HOY, MI_BOTIQUIN, SALUD_APOYO, ANALISIS_DFS }
 
-enum class FormaFarmaceutica(val label: String) {
-    COMPRIMIDOS("Comprimidos / Cápsulas"),
-    GOTAS("Gotas / Jarabe"),
-    INYECTABLE("Inyectable / Ampolla")
+enum class FormaFarmaceutica(
+    val label: String,
+    val shortLabel: String,
+    val apiKey: String,
+    val unitPlural: String
+) {
+    COMPRIMIDOS("Comprimidos / Cápsulas", "Pastilla", "comprimidos", "comprimidos"),
+    GOTAS("Gotas / Jarabe", "Gotas", "gotas", "ml/gotas"),
+    INYECTABLE("Inyectable / Ampolla", "Inyección", "inyectable", "dosis");
+
+    companion object {
+        fun fromString(raw: String?): FormaFarmaceutica {
+            if (raw.isNullOrBlank()) return COMPRIMIDOS
+            return when {
+                raw.contains("gota", ignoreCase = true) ||
+                    raw.contains("jarabe", ignoreCase = true) ||
+                    raw.contains("ml", ignoreCase = true) -> GOTAS
+                raw.contains("inyec", ignoreCase = true) ||
+                    raw.contains("ampolla", ignoreCase = true) -> INYECTABLE
+                else -> COMPRIMIDOS
+            }
+        }
+    }
 }
 
 data class TomaHoyItemUi(
@@ -37,14 +59,19 @@ data class TomaHoyItemUi(
     val idTratamiento: Int,
     val idMedicamento: Int,
     val etiquetaPeriodo: String,    // TOMA MATUTINA / TOMA DE TARDE / TOMA NOCTURNA
-    val horaFormateada: String,     // ej. 08:00 AM, 14:30 PM, 21:00 PM
+    val horaFormateada: String,     // ej. 08:00 AM, 02:30 PM, 09:00 PM
     val nombreMedicamento: String,
-    val dosisDetalle: String,       // ej. 20 mg • En ayunas
+    val dosisDetalle: String,       // ej. 20 mg • Con alimentos
+    val instruccionesToma: String = "Tomar con abundante agua.",
+    val formaFarmaceutica: FormaFarmaceutica = FormaFarmaceutica.COMPRIMIDOS,
+    val colorPastilla: String = "blanco",
     val estado: String,             // pendiente, tomado, pospuesto, omitido
     val vecesPospuesto: Int,
     val permitePosponer: Boolean = true,
     val esCritico: Boolean = false,
-    val contraindicaciones: String? = null
+    val contraindicaciones: String? = null,
+    val minutosParaToma: Long = 0L,
+    val esEnFuturoLejano: Boolean = false // true si falta > 2 horas (120 min)
 )
 
 enum class StockNivel(val label: String) {
@@ -56,11 +83,17 @@ enum class StockNivel(val label: String) {
 data class BotiquinItemUi(
     val idMedicamento: Int,
     val nombre: String,
+    val principioActivo: String? = null,
+    val dosis: String = "",
     val subtituloDosis: String,
     val stockActual: Int,
     val capacidadReferencia: Int,
     val porcentajeRestante: Int,
     val textoQuedan: String,
+    val unidadTexto: String = "comprimidos",
+    val formaFarmaceutica: FormaFarmaceutica = FormaFarmaceutica.COMPRIMIDOS,
+    val colorPastilla: String = "blanco",
+    val instruccionesToma: String? = null,
     val nivel: StockNivel,
     val permitePosponer: Boolean = true,
     val esCritico: Boolean = false,
@@ -69,16 +102,24 @@ data class BotiquinItemUi(
 
 data class NuevoMedicamentoFormState(
     val forma: FormaFarmaceutica = FormaFarmaceutica.COMPRIMIDOS,
+    val colorPastilla: String = "blanco",
     val nombre: String = "",
     val principioActivo: String = "",
     val dosis: String = "",
     val frecuenciaTexto: String = "Cada 8 horas",
     val frecuenciaHoras: Int = 8,
+    val horaPrimeraToma: String = "08:00 AM",
+    val duracionTratamiento: String = "Crónico / Continuo",
+    val duracionDias: Int? = null,
+    val instruccionesToma: String = "Con abundante agua",
+    val proposito: String = "",
     val cantidadStockTexto: String = "30",
     val permitePosponer: Boolean = true,
     val esCritico: Boolean = false,
     val contraindicaciones: String = "",
     val alertaAlergia: String? = null,
+    val alertaInteraccion: String? = null,
+    val showConfirmacionRiesgoModal: Boolean = false,
     val catalogoSugerencias: List<MedicamentoCatalogoItemDto> = emptyList(),
     val isBuscandoCatalogo: Boolean = false,
     val nombreError: String? = null,
@@ -86,16 +127,33 @@ data class NuevoMedicamentoFormState(
     val isSubmitting: Boolean = false
 )
 
+enum class MediReactionKind { TAKEN, SNOOZED, SKIPPED }
+
+data class MediReaction(val kind: MediReactionKind, val seq: Int)
+
 data class HomeUiState(
+    val mediReaction: MediReaction? = null,
     val selectedTab: HomeTab = HomeTab.HOY,
     val showNuevoMedicamento: Boolean = false,
     val selectedTomaForModal: TomaHoyItemUi? = null,
+    val nombreUsuario: String = "Paciente",
     val fechaEncabezado: String = "",
     val tomasHoy: List<TomaHoyItemUi> = emptyList(),
     val tomasCompletadasCount: Int = 0,
+    val vecesOmitidasHoy: Int = 0,
+    val tomasCriticasOmitidasHoy: Int = 0,
+    val rachaDias: Int = 5,
+    val escudosRacha: Int = 2,
+    val puntosXp: Int = 340,
+    val rangoHonor: String = "Plata",
+    val progresoHonorPct: Int = 68,
+    val castigoActivo: Boolean = false,
+    val castigoPosponerBloqueado: Boolean = false,
+    val modoTextoGrande: Boolean = false,
+    val modoAltoContraste: Boolean = false,
     val botiquinItems: List<BotiquinItemUi> = emptyList(),
-    val porcentajeGlobalSuministros: Int = 100,
-    val diasReposicionEstimada: Int = 6,
+    val porcentajeGlobalSuministros: Int = 0,
+    val diasReposicionEstimada: Int = 0,
     val alergiasUsuario: List<AlergiaDto> = emptyList(),
     val contactosApoyo: List<ContactoApoyoDto> = emptyList(),
     val isLoading: Boolean = false,
@@ -110,13 +168,41 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
+    private val capacidadPorMedicamento = mutableMapOf<Int, Int>()
+    private val metadatosLocalesMed = mutableMapOf<Int, LocalMedMeta>()
 
-    init {
-        cargarDatos()
+    private data class LocalMedMeta(
+        val forma: FormaFarmaceutica,
+        val colorPastilla: String,
+        val instruccionesToma: String,
+        val stockInicial: Int
+    )
+
+    fun limpiarSesion() {
+        searchJob?.cancel()
+        capacidadPorMedicamento.clear()
+        metadatosLocalesMed.clear()
+        _state.value = HomeUiState(fechaEncabezado = buildFechaHoyEsp())
     }
+
+    fun onToggleTextoGrande() {
+        _state.update { it.copy(modoTextoGrande = !it.modoTextoGrande) }
+    }
+
+    fun onToggleAltoContraste() {
+        _state.update { it.copy(modoAltoContraste = !it.modoAltoContraste) }
+    }
+
+    private var lastLoadedTime: Long = 0L
 
     fun onSelectTab(tab: HomeTab) {
         _state.update { it.copy(selectedTab = tab, selectedTomaForModal = null) }
+        val now = System.currentTimeMillis()
+        if ((tab == HomeTab.MI_BOTIQUIN || tab == HomeTab.HOY) &&
+            (now - lastLoadedTime > 60_000L || _state.value.tomasHoy.isEmpty())
+        ) {
+            cargarDatos(silencioso = true)
+        }
     }
 
     fun onOpenNuevoMedicamento() {
@@ -133,6 +219,8 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         _state.update { it.copy(showNuevoMedicamento = false) }
     }
 
+    fun onCerrarNuevoMedicamento() = onCloseNuevoMedicamento()
+
     fun onOpenConfirmacionToma(item: TomaHoyItemUi) {
         if (item.estado != "pendiente") return
         _state.update { it.copy(selectedTomaForModal = item) }
@@ -143,11 +231,14 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         _state.update { it.copy(selectedTomaForModal = null) }
     }
 
+    private fun nextReaction(prev: HomeUiState, kind: MediReactionKind) =
+        MediReaction(kind, (prev.mediReaction?.seq ?: 0) + 1)
+
     fun onSnackbarShown() {
         _state.update { it.copy(snackbarMessage = null) }
     }
 
-    // --- Acciones de Toma ---
+    // --- Acciones de Toma y Reversión (Undo) ---
 
     fun onTomarAhora() {
         val toma = _state.value.selectedTomaForModal ?: return
@@ -162,7 +253,8 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
-                            snackbarMessage = "Toma registrada: ${toma.nombreMedicamento}"
+                            snackbarMessage = "+25 XP • Toma registrada: ${toma.nombreMedicamento}",
+                            mediReaction = nextReaction(it, MediReactionKind.TAKEN)
                         )
                     }
                     cargarDatos(silencioso = true)
@@ -183,6 +275,13 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         val toma = _state.value.selectedTomaForModal ?: return
         if (_state.value.isActionInFlight) return
 
+        if (_state.value.castigoPosponerBloqueado) {
+            _state.update {
+                it.copy(snackbarMessage = "Posponer bloqueado por bajo Honor. Cumple tus tomas a tiempo para desbloquearlo.")
+            }
+            return
+        }
+
         if (!toma.permitePosponer || toma.esCritico) {
             _state.update {
                 it.copy(snackbarMessage = "Este medicamento es crítico y NO puede posponerse.")
@@ -196,7 +295,7 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             res.fold(
                 onSuccess = { updatedDto ->
                     val msg = if (updatedDto.estado == "omitido") {
-                        "Límite de posposiciones alcanzado: marcado como omitido"
+                        "Límite de posposiciones alcanzado: marcado como omitido (-45 XP)"
                     } else {
                         "Pospuesto 30 minutos (${updatedDto.vecesPospuesto}/2)"
                     }
@@ -204,7 +303,11 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
-                            snackbarMessage = msg
+                            snackbarMessage = msg,
+                            mediReaction = nextReaction(
+                                it,
+                                if (updatedDto.estado == "omitido") MediReactionKind.SKIPPED else MediReactionKind.SNOOZED
+                            )
                         )
                     }
                     cargarDatos(silencioso = true)
@@ -234,7 +337,8 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
-                            snackbarMessage = "Toma marcada como omitida"
+                            snackbarMessage = "Toma omitida (-45 XP • Honor penalizado)",
+                            mediReaction = nextReaction(it, MediReactionKind.SKIPPED)
                         )
                     }
                     cargarDatos(silencioso = true)
@@ -251,10 +355,138 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
+    fun onRevertirToma(idRecordatorio: Int) {
+        if (_state.value.isActionInFlight) return
+        _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
+        viewModelScope.launch {
+            val res = repository.revertirRecordatorio(idRecordatorio)
+            res.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            isActionInFlight = false,
+                            snackbarMessage = "Acción deshecha: la toma volvió a estado Pendiente"
+                        )
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    // Si el backend aún no expone /revertir, revertimos localmente en UI para no bloquear al paciente
+                    _state.update { prev ->
+                        val updatedTomas = prev.tomasHoy.map { item ->
+                            if (item.idRecordatorio == idRecordatorio) item.copy(estado = "pendiente") else item
+                        }
+                        val completadas = updatedTomas.count { it.estado == "tomado" }
+                        val omitidas = updatedTomas.count { it.estado == "omitido" }
+                        prev.copy(
+                            isActionInFlight = false,
+                            tomasHoy = updatedTomas,
+                            tomasCompletadasCount = completadas,
+                            vecesOmitidasHoy = omitidas,
+                            castigoActivo = omitidas > 0,
+                            castigoPosponerBloqueado = omitidas > 0,
+                            snackbarMessage = err.message ?: "Toma restaurada a pendiente"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    // --- Acciones de Botiquín: Recargar Caja (+30) y Eliminar Medicamento ---
+
+    fun onRecargarStock(idMedicamento: Int, cantidadExtra: Int = 30) {
+        val item = _state.value.botiquinItems.firstOrNull { it.idMedicamento == idMedicamento } ?: return
+        val nuevoStock = (item.stockActual + cantidadExtra).coerceAtLeast(1)
+        capacidadPorMedicamento[idMedicamento] = maxOf(item.capacidadReferencia, nuevoStock)
+
+        val fallbackDto = MedicamentoCreateDto(
+            nombre = item.nombre,
+            principioActivo = item.principioActivo,
+            dosis = item.dosis.ifBlank { "1 comprimido" },
+            cantidadStock = nuevoStock,
+            stockInicial = maxOf(item.capacidadReferencia, nuevoStock),
+            formaFarmaceutica = item.formaFarmaceutica.apiKey,
+            colorPastilla = item.colorPastilla,
+            instruccionesToma = item.instruccionesToma,
+            permitePosponer = item.permitePosponer,
+            esCritico = item.esCritico,
+            contraindicaciones = item.contraindicaciones
+        )
+
+        viewModelScope.launch {
+            val res = repository.actualizarStockMedicamento(idMedicamento, nuevoStock, fallbackDto)
+            res.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(snackbarMessage = "+$cantidadExtra ${item.unidadTexto} agregados a ${item.nombre}")
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(snackbarMessage = err.message ?: "No se pudo actualizar el stock")
+                    }
+                }
+            )
+        }
+    }
+
+    fun onEliminarMedicamento(idMedicamento: Int) {
+        val item = _state.value.botiquinItems.firstOrNull { it.idMedicamento == idMedicamento }
+        viewModelScope.launch {
+            val res = repository.eliminarMedicamento(idMedicamento)
+            res.fold(
+                onSuccess = {
+                    capacidadPorMedicamento.remove(idMedicamento)
+                    metadatosLocalesMed.remove(idMedicamento)
+                    _state.update {
+                        it.copy(snackbarMessage = "${item?.nombre ?: "Medicamento"} eliminado del botiquín")
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(snackbarMessage = err.message ?: "No se pudo eliminar el medicamento")
+                    }
+                }
+            )
+        }
+    }
+
     // --- Formulario Nuevo Medicamento & Autocompletado ---
 
     fun onFormaChange(forma: FormaFarmaceutica) {
-        _state.update { it.copy(form = it.form.copy(forma = forma)) }
+        val defaultDosis = when (forma) {
+            FormaFarmaceutica.COMPRIMIDOS -> if (_state.value.form.dosis.isBlank()) "1 comprimido" else _state.value.form.dosis
+            FormaFarmaceutica.GOTAS -> if (_state.value.form.dosis.isBlank() || _state.value.form.dosis == "1 comprimido") "10 ml" else _state.value.form.dosis
+            FormaFarmaceutica.INYECTABLE -> if (_state.value.form.dosis.isBlank() || _state.value.form.dosis == "1 comprimido") "1 ampolla" else _state.value.form.dosis
+        }
+        _state.update { it.copy(form = it.form.copy(forma = forma, dosis = defaultDosis)) }
+    }
+
+    fun onColorPastillaChange(color: String) {
+        _state.update { it.copy(form = it.form.copy(colorPastilla = color)) }
+    }
+
+    fun onHoraPrimeraTomaChange(hora: String) {
+        _state.update { it.copy(form = it.form.copy(horaPrimeraToma = hora)) }
+    }
+
+    fun onDuracionChange(etiqueta: String, dias: Int?) {
+        _state.update { it.copy(form = it.form.copy(duracionTratamiento = etiqueta, duracionDias = dias)) }
+    }
+
+    fun onInstruccionesTomaChange(instruccion: String) {
+        _state.update { it.copy(form = it.form.copy(instruccionesToma = instruccion)) }
+    }
+
+    fun onPropositoChange(v: String) {
+        _state.update { it.copy(form = it.form.copy(proposito = v)) }
+    }
+
+    fun onDismissConfirmacionRiesgoModal() {
+        _state.update { it.copy(form = it.form.copy(showConfirmacionRiesgoModal = false)) }
     }
 
     fun onNombreMedChange(v: String) {
@@ -264,7 +496,15 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         searchJob = viewModelScope.launch {
             delay(200) // Debounce para no saturar
             if (v.isBlank()) {
-                _state.update { it.copy(form = it.form.copy(catalogoSugerencias = emptyList(), alertaAlergia = null)) }
+                _state.update {
+                    it.copy(
+                        form = it.form.copy(
+                            catalogoSugerencias = emptyList(),
+                            alertaAlergia = null,
+                            alertaInteraccion = null
+                        )
+                    )
+                }
                 return@launch
             }
 
@@ -274,13 +514,17 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
             // 2. Verificar si hay alertas de alergia con lo que el usuario está escribiendo
             val alergiaRes = repository.verificarAlergias(nombre = v, principioActivo = _state.value.form.principioActivo)
-            val alerta = alergiaRes.getOrNull()?.let { if (it.tieneConflicto) it.alerta else null }
+            val alerta = alergiaRes.getOrNull()?.let { if (it.tieneConflicto) it.alerta?.cleanClinicalText() else null }
+
+            // 3. Verificar interacciones medicamentosas con el botiquín actual
+            val interaccion = evaluarInteraccionConBotiquin(v, _state.value.form.principioActivo)
 
             _state.update {
                 it.copy(
                     form = it.form.copy(
                         catalogoSugerencias = sugerencias,
-                        alertaAlergia = alerta
+                        alertaAlergia = alerta,
+                        alertaInteraccion = interaccion
                     )
                 )
             }
@@ -288,14 +532,12 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     }
 
     fun onSelectCatalogoSugerencia(item: MedicamentoCatalogoItemDto) {
-        val formaEncontrada = when {
-            item.formaFarmaceutica.contains("Gotas", ignoreCase = true) || item.formaFarmaceutica.contains("Jarabe", ignoreCase = true) -> FormaFarmaceutica.GOTAS
-            item.formaFarmaceutica.contains("Inyectable", ignoreCase = true) -> FormaFarmaceutica.INYECTABLE
-            else -> FormaFarmaceutica.COMPRIMIDOS
-        }
-
+        val formaEncontrada = FormaFarmaceutica.fromString(item.formaFarmaceutica)
         val esCritico = item.esCriticoDefecto
         val permitePosponer = !item.esCriticoDefecto
+        val colorSugerido = item.colorSugerido ?: _state.value.form.colorPastilla
+        val instruccionSugerida = item.instruccionesToma ?: _state.value.form.instruccionesToma
+        val interaccion = evaluarInteraccionConBotiquin(item.nombre, item.principioActivo)
 
         _state.update {
             it.copy(
@@ -304,9 +546,12 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     principioActivo = item.principioActivo,
                     dosis = item.dosisSugerida,
                     forma = formaEncontrada,
+                    colorPastilla = colorSugerido,
+                    instruccionesToma = instruccionSugerida,
                     contraindicaciones = item.contraindicaciones,
                     esCritico = esCritico,
                     permitePosponer = permitePosponer,
+                    alertaInteraccion = interaccion,
                     catalogoSugerencias = emptyList()
                 )
             )
@@ -315,9 +560,35 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         // Validar alergias del medicamento seleccionado de inmediato
         viewModelScope.launch {
             val alergiaRes = repository.verificarAlergias(nombre = item.nombre, principioActivo = item.principioActivo)
-            val alerta = alergiaRes.getOrNull()?.let { if (it.tieneConflicto) it.alerta else null }
+            val alerta = alergiaRes.getOrNull()?.let { if (it.tieneConflicto) it.alerta?.cleanClinicalText() else null }
             _state.update { it.copy(form = it.form.copy(alertaAlergia = alerta)) }
         }
+    }
+
+    private fun evaluarInteraccionConBotiquin(nombreNuevo: String, principioNuevo: String?): String? {
+        val textoNuevo = "${nombreNuevo.lowercase()} ${(principioNuevo ?: "").lowercase()}"
+        val actuales = _state.value.botiquinItems
+        if (actuales.isEmpty()) return null
+
+        // Duplicidad de medicamento o principio activo
+        val duplicado = actuales.firstOrNull {
+            it.nombre.equals(nombreNuevo.trim(), ignoreCase = true) ||
+                (!principioNuevo.isNullOrBlank() && it.principioActivo?.equals(principioNuevo.trim(), ignoreCase = true) == true)
+        }
+        if (duplicado != null) {
+            return "Duplicidad terapéutica: '${duplicado.nombre}' ya está activo en tu botiquín con el mismo principio activo."
+        }
+
+        // Interacción AINEs (Ibuprofeno, Naproxeno, Aspirina, Ketorolaco) con Antihipertensivos / Anticoagulantes
+        val esAine = listOf("ibuprofeno", "naproxeno", "aspirina", "ketorolaco", "diclofenaco", "meloxicam").any { textoNuevo.contains(it) }
+        val tieneAntihipertensivoOAnticoagulante = actuales.firstOrNull { med ->
+            val t = "${med.nombre.lowercase()} ${(med.principioActivo ?: "").lowercase()}"
+            listOf("losartan", "losartán", "enalapril", "warfarina", "acenocumarol", "clopidogrel", "rivaroxaban", "aspirina").any { t.contains(it) }
+        }
+        if (esAine && tieneAntihipertensivoOAnticoagulante != null) {
+            return "Posible interacción farmacológica con '${tieneAntihipertensivoOAnticoagulante.nombre}': los AINEs pueden reducir el efecto antihipertensivo o aumentar el riesgo gástrico/hemorrágico."
+        }
+        return null
     }
 
     fun onDosisMedChange(v: String) {
@@ -381,21 +652,33 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         _state.update { it.copy(form = it.form.copy(cantidadStockTexto = next.toString())) }
     }
 
-    fun onGuardarMedicamento() {
+    fun onGuardarMedicamento(forzarConRiesgo: Boolean = false) {
         val f = _state.value.form
         if (f.isSubmitting) return
 
         val nombreErr = if (f.nombre.isBlank()) "Ingresa el nombre del medicamento" else null
-        val dosisReal = f.dosis.ifBlank { "1 comprimido" }
+        val dosisDefault = when (f.forma) {
+            FormaFarmaceutica.COMPRIMIDOS -> "1 comprimido"
+            FormaFarmaceutica.GOTAS -> "10 ml"
+            FormaFarmaceutica.INYECTABLE -> "1 ampolla"
+        }
+        val dosisReal = f.dosis.ifBlank { dosisDefault }
         if (nombreErr != null) {
             _state.update { it.copy(form = f.copy(nombreError = nombreErr)) }
             return
         }
 
+        // Si existe alerta de alergia o interacción farmacológica y el usuario aún no la confirmó explícitamente:
+        if (!forzarConRiesgo && (f.alertaAlergia != null || f.alertaInteraccion != null)) {
+            _state.update { it.copy(form = f.copy(showConfirmacionRiesgoModal = true)) }
+            return
+        }
+
         val stock = f.cantidadStockTexto.toIntOrNull()?.coerceAtLeast(0) ?: 30
         val freqHoras = f.frecuenciaHoras.coerceIn(1, 168)
+        val (fechaInicioIso, fechaFinIso) = calcularFechasTratamientoUtc(f.horaPrimeraToma, f.duracionDias)
 
-        _state.update { it.copy(form = f.copy(isSubmitting = true)) }
+        _state.update { it.copy(form = f.copy(isSubmitting = true, showConfirmacionRiesgoModal = false)) }
         viewModelScope.launch {
             val res = repository.registrarMedicamentoConTratamiento(
                 nombre = f.nombre,
@@ -405,10 +688,23 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                 cantidadStock = stock,
                 permitePosponer = f.permitePosponer,
                 esCritico = f.esCritico,
-                contraindicaciones = f.contraindicaciones
+                contraindicaciones = f.contraindicaciones,
+                formaFarmaceutica = f.forma.apiKey,
+                colorPastilla = f.colorPastilla,
+                instruccionesToma = f.instruccionesToma,
+                proposito = f.proposito,
+                fechaInicio = fechaInicioIso,
+                fechaFin = fechaFinIso
             )
             res.fold(
                 onSuccess = { medCreado ->
+                    capacidadPorMedicamento[medCreado.idMedicamento] = maxOf(stock, 1)
+                    metadatosLocalesMed[medCreado.idMedicamento] = LocalMedMeta(
+                        forma = f.forma,
+                        colorPastilla = f.colorPastilla,
+                        instruccionesToma = f.instruccionesToma,
+                        stockInicial = stock
+                    )
                     _state.update {
                         it.copy(
                             showNuevoMedicamento = false,
@@ -428,6 +724,24 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                 }
             )
         }
+    }
+
+    private fun calcularFechasTratamientoUtc(horaPrimeraToma: String, duracionDias: Int?): Pair<String?, String?> {
+        return runCatching {
+            val zone = ZoneId.systemDefault()
+            val hoy = LocalDate.now(zone)
+            val ldtLocal = when (horaPrimeraToma) {
+                "08:00 AM" -> hoy.atTime(8, 0)
+                "02:00 PM" -> hoy.atTime(14, 0)
+                "09:00 PM" -> hoy.atTime(21, 0)
+                else -> LocalDateTime.now(zone)
+            }
+            val inicioUtc = ldtLocal.atZone(zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
+            val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+            val inicioStr = inicioUtc.format(fmt)
+            val finStr = duracionDias?.let { inicioUtc.plusDays(it.toLong()).format(fmt) }
+            inicioStr to finStr
+        }.getOrDefault(null to null)
     }
 
     // --- Operaciones de Alergias ---
@@ -513,12 +827,19 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     // --- Carga y mapeo de datos desde el Backend ---
 
     fun cargarDatos(silencioso: Boolean = false) {
+        lastLoadedTime = System.currentTimeMillis()
         if (!silencioso) {
             _state.update { it.copy(isLoading = true) }
         }
         viewModelScope.launch {
-            val hoyUtc = LocalDate.now(ZoneOffset.UTC).toString()
-            val res = repository.cargarDashboard(fechaUtc = hoyUtc)
+            val zoneLocal = ZoneId.systemDefault()
+            val hoyLocal = LocalDate.now(zoneLocal).toString()
+            val tzOffsetMinutes = zoneLocal.rules.getOffset(Instant.now()).totalSeconds / 60
+
+            val res = repository.cargarDashboard(
+                fechaUtc = hoyLocal,
+                tzOffsetMinutes = tzOffsetMinutes
+            )
             res.fold(
                 onSuccess = { bundle ->
                     val tomasUi = mapRecordatoriosToUi(
@@ -528,18 +849,59 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     )
                     val botiquinUi = mapMedicamentosToBotiquinUi(bundle.medicamentos)
                     val completadas = tomasUi.count { it.estado == "tomado" }
-                    val promedioGlobal = if (botiquinUi.isEmpty()) 100 else {
+                    val omitidas = tomasUi.count { it.estado == "omitido" }
+                    val criticasOmitidas = tomasUi.count { it.estado == "omitido" && it.esCritico }
+
+                    // Estado de Botiquín vacío: 0% y 0 días (nunca 100% ni 6 días cuando no hay medicamentos)
+                    val promedioGlobal = if (botiquinUi.isEmpty()) 0 else {
                         botiquinUi.map { it.porcentajeRestante }.average().toInt().coerceIn(0, 100)
                     }
+                    val diasReposicion = if (botiquinUi.isEmpty()) {
+                        0
+                    } else {
+                        bundle.medicamentos.mapNotNull { med ->
+                            val trat = bundle.tratamientos.firstOrNull {
+                                it.idMedicamento == med.idMedicamento && it.estado == "activo"
+                            }
+                            if (trat != null && trat.frecuenciaHoras > 0) {
+                                (med.cantidadStock * trat.frecuenciaHoras) / 24
+                            } else {
+                                med.cantidadStock
+                            }
+                        }.minOrNull() ?: 0
+                    }
 
-                    _state.update {
-                        it.copy(
+                    // Cálculo de Racha estilo TikTok, Escudos y Rango de Honor
+                    val baseXp = 320 + (completadas * 30) - (omitidas * 55)
+                    val xpActual = baseXp.coerceAtLeast(40)
+                    val (rangoNombre, progresoPct) = calcularRangoHonor(xpActual)
+                    val rachaCalculada = when {
+                        omitidas > 0 -> 0 // Racha apagada por omisión no protegida
+                        completadas > 0 -> 7 + completadas // Evoluciona a fuego azul eléctrico
+                        else -> 5
+                    }
+                    val escudosDisp = if (omitidas > 0) 1 else 2
+                    val castigoActivo = omitidas > 0 || xpActual < 200
+
+                    _state.update { prev ->
+                        prev.copy(
                             isLoading = false,
+                            nombreUsuario = bundle.nombreUsuario?.takeIf { it.isNotBlank() } ?: prev.nombreUsuario,
                             fechaEncabezado = buildFechaHoyEsp(),
                             tomasHoy = tomasUi,
                             tomasCompletadasCount = completadas,
+                            vecesOmitidasHoy = omitidas,
+                            tomasCriticasOmitidasHoy = criticasOmitidas,
+                            rachaDias = rachaCalculada,
+                            escudosRacha = escudosDisp,
+                            puntosXp = xpActual,
+                            rangoHonor = rangoNombre,
+                            progresoHonorPct = progresoPct,
+                            castigoActivo = castigoActivo,
+                            castigoPosponerBloqueado = castigoActivo,
                             botiquinItems = botiquinUi,
                             porcentajeGlobalSuministros = promedioGlobal,
+                            diasReposicionEstimada = diasReposicion,
                             alergiasUsuario = bundle.alergias,
                             contactosApoyo = bundle.contactosApoyo
                         )
@@ -557,6 +919,16 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
+    private fun calcularRangoHonor(xp: Int): Pair<String, Int> {
+        return when {
+            xp < 200 -> "Hierro" to ((xp.coerceAtLeast(0) * 100) / 200).coerceIn(5, 100)
+            xp < 300 -> "Bronce" to (((xp - 200) * 100) / 100).coerceIn(5, 100)
+            xp < 450 -> "Plata" to (((xp - 300) * 100) / 150).coerceIn(5, 100)
+            xp < 650 -> "Oro" to (((xp - 450) * 100) / 200).coerceIn(5, 100)
+            else -> "Diamante" to 100
+        }
+    }
+
     private fun mapRecordatoriosToUi(
         recordatorios: List<RecordatorioDto>,
         tratamientos: List<TratamientoDto>,
@@ -565,10 +937,14 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         val tratById = tratamientos.associateBy { it.idTratamiento }
         val medById = medicamentos.associateBy { it.idMedicamento }
         val zoneLocal = ZoneId.systemDefault()
+        val ahoraLocal = LocalDateTime.now(zoneLocal)
 
         return recordatorios.mapNotNull { rec ->
             val trat = tratById[rec.idTratamiento]
             val med = trat?.let { medById[it.idMedicamento] }
+            val idMed = med?.idMedicamento ?: 0
+            val localMeta = metadatosLocalesMed[idMed]
+
             val nombreMed = rec.nombreMedicamento ?: med?.nombre ?: "Medicamento #${rec.idTratamiento}"
             val dosisMed = rec.dosis ?: med?.dosis ?: "1 dosis"
 
@@ -581,58 +957,97 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                 hour < 19 -> "TOMA DE TARDE"
                 else -> "TOMA NOCTURNA"
             }
-            val sufijo = if (hour < 12) "AM" else "PM"
-            val horaStr = String.format(Locale.US, "%02d:%02d %s", hour, minute, sufijo)
 
-            val indicacion = when {
-                hour < 12 -> "En ayunas"
-                hour < 19 -> "Con el almuerzo"
-                else -> "1 comprimido"
-            }
+            // Formato 12h real (ej. 14:30 -> 02:30 PM, 00:15 -> 12:15 AM)
+            val hour12 = if (hour % 12 == 0) 12 else hour % 12
+            val sufijo = if (hour < 12) "AM" else "PM"
+            val horaStr = String.format(Locale.US, "%02d:%02d %s", hour12, minute, sufijo)
+
+            val formaReal = FormaFarmaceutica.fromString(
+                rec.formaFarmaceutica ?: med?.formaFarmaceutica ?: localMeta?.forma?.apiKey ?: dosisMed
+            )
+            val colorReal = (rec.colorPastilla ?: med?.colorPastilla ?: localMeta?.colorPastilla ?: "blanco").lowercase()
+            val instruccionReal = (rec.instruccionesToma ?: med?.instruccionesToma ?: localMeta?.instruccionesToma)
+                ?.takeIf { it.isNotBlank() }
+                ?: formaReal.label
+
+            val minutosParaToma = Duration.between(ahoraLocal, localDateTime).toMinutes()
 
             TomaHoyItemUi(
                 idRecordatorio = rec.idRecordatorio,
                 idTratamiento = rec.idTratamiento,
-                idMedicamento = med?.idMedicamento ?: 0,
+                idMedicamento = idMed,
                 etiquetaPeriodo = periodo,
                 horaFormateada = horaStr,
                 nombreMedicamento = nombreMed,
-                dosisDetalle = "$dosisMed • $indicacion",
+                dosisDetalle = "$dosisMed • $instruccionReal",
+                instruccionesToma = instruccionReal,
+                formaFarmaceutica = formaReal,
+                colorPastilla = colorReal,
                 estado = rec.estado,
                 vecesPospuesto = rec.vecesPospuesto,
                 permitePosponer = rec.permitePosponer && (med?.permitePosponer != false),
                 esCritico = rec.esCritico || (med?.esCritico == true),
-                contraindicaciones = med?.contraindicaciones
+                contraindicaciones = med?.contraindicaciones,
+                minutosParaToma = minutosParaToma,
+                esEnFuturoLejano = minutosParaToma > 120L
             )
         }
     }
 
     private fun mapMedicamentosToBotiquinUi(medicamentos: List<MedicamentoDto>): List<BotiquinItemUi> {
         return medicamentos.map { med ->
+            val stock = med.cantidadStock
+            val localMeta = metadatosLocalesMed[med.idMedicamento]
+            val stockInicialDto = med.stockInicial ?: localMeta?.stockInicial
+            val prevCap = capacidadPorMedicamento[med.idMedicamento]
+
             val capacidadRef = when {
-                med.cantidadStock > 30 -> ((med.cantidadStock + 9) / 10) * 10
-                med.cantidadStock in 21..30 -> 30
-                med.cantidadStock in 15..20 -> 20
+                stockInicialDto != null && stockInicialDto >= stock && stockInicialDto > 0 -> stockInicialDto
+                prevCap != null && prevCap >= stock -> prevCap
+                stock > 30 -> ((stock + 9) / 10) * 10
+                stock in 21..30 -> 30
+                stock in 15..20 -> 20
+                stock in 1..14 -> 20
                 else -> 30
             }
-            val pct = ((med.cantidadStock.toFloat() / capacidadRef.toFloat()) * 100f)
-                .toInt()
-                .coerceIn(0, 100)
+            capacidadPorMedicamento[med.idMedicamento] = maxOf(
+                capacidadPorMedicamento[med.idMedicamento] ?: 0,
+                capacidadRef,
+                stock
+            )
+
+            val pct = if (capacidadRef > 0) {
+                ((stock.toFloat() / capacidadRef.toFloat()) * 100f).toInt().coerceIn(0, 100)
+            } else 0
 
             val nivel = when {
-                pct <= 25 || med.cantidadStock <= 5 -> StockNivel.BAJO
+                pct <= 25 || stock <= 5 -> StockNivel.BAJO
                 pct >= 85 -> StockNivel.OPTIMO
                 else -> StockNivel.NORMAL
             }
 
+            val formaReal = FormaFarmaceutica.fromString(
+                med.formaFarmaceutica ?: localMeta?.forma?.apiKey ?: med.dosis
+            )
+            val unidad = formaReal.unitPlural
+            val colorReal = (med.colorPastilla ?: localMeta?.colorPastilla ?: "blanco").lowercase()
+            val instruccionReal = med.instruccionesToma ?: localMeta?.instruccionesToma
+
             BotiquinItemUi(
                 idMedicamento = med.idMedicamento,
                 nombre = med.nombre,
-                subtituloDosis = "${med.dosis} • Caja de $capacidadRef comprimidos",
-                stockActual = med.cantidadStock,
+                principioActivo = med.principioActivo,
+                dosis = med.dosis,
+                subtituloDosis = "${med.dosis} • Envase de $capacidadRef $unidad",
+                stockActual = stock,
                 capacidadReferencia = capacidadRef,
                 porcentajeRestante = pct,
-                textoQuedan = "Quedan ${med.cantidadStock} comprimidos",
+                textoQuedan = "Quedan $stock $unidad",
+                unidadTexto = unidad,
+                formaFarmaceutica = formaReal,
+                colorPastilla = colorReal,
+                instruccionesToma = instruccionReal,
                 nivel = nivel,
                 permitePosponer = med.permitePosponer,
                 esCritico = med.esCritico,
@@ -652,11 +1067,15 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     }
 
     private fun buildFechaHoyEsp(): String {
-        val hoy = LocalDate.now()
+        val hoy = LocalDate.now(ZoneId.systemDefault())
         val esLocale = Locale.forLanguageTag("es-ES")
         val formatter = DateTimeFormatter.ofPattern("EEEE, d 'de' MMM", esLocale)
         val raw = hoy.format(formatter)
         return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(esLocale) else it.toString() }
+    }
+
+    private fun String.cleanClinicalText(): String {
+        return this.replace(Regex("[\\p{So}\\p{Cn}\\u2600-\\u27BF\\uD83C-\\uDBFF\\uDC00-\\uDFFF]"), "").trim()
     }
 
     class Factory(private val repository: MedRepository) : ViewModelProvider.Factory {
@@ -664,3 +1083,4 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel(repository) as T
     }
 }
+

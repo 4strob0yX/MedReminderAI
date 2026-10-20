@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -19,9 +20,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -92,54 +96,60 @@ fun SaludApoyoScreenContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         // Encabezado
         item {
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = SoftWarmSurface,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = TealBadgeBg
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = TealBadgeBg
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.HealthAndSafety,
-                                contentDescription = null,
-                                tint = TealBadgeText,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "SEGURIDAD CLÍNICA",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = TealBadgeText,
-                                letterSpacing = 0.6.sp
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.HealthAndSafety,
+                                    contentDescription = null,
+                                    tint = TealBadgeText,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    text = "SEGURIDAD CLÍNICA",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TealBadgeText,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = "Alergias y Contacto de Apoyo",
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(3.dp))
                     Text(
-                        text = "Tus medicamentos se validan automáticamente con tus alergias. Tu contacto de apoyo podrá ser asistido ante dosis críticas o emergencias.",
-                        fontSize = 13.5.sp,
+                        text = "Validación cruzada de alergias y enlace rápido con tu red de cuidadores ante dosis críticas.",
+                        fontSize = 12.5.sp,
                         color = TextSecondary,
-                        lineHeight = 19.sp
+                        lineHeight = 17.sp
                     )
                 }
             }
@@ -152,7 +162,10 @@ fun SaludApoyoScreenContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.ContactPhone,
                         contentDescription = null,
@@ -164,7 +177,9 @@ fun SaludApoyoScreenContent(
                         text = "Contacto de Apoyo",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (state.contactosApoyo.isNotEmpty()) {
@@ -229,22 +244,27 @@ fun SaludApoyoScreenContent(
                 }
             }
         } else {
-            items(state.contactosApoyo) { contacto ->
+            items(state.contactosApoyo, key = { it.idContacto }) { contacto ->
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = CardBackground,
                     border = BorderStroke(1.dp, InputBorderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = CyanIconBg,
-                                modifier = Modifier.size(46.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -256,31 +276,32 @@ fun SaludApoyoScreenContent(
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = contacto.nombreCompleto,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    if (contacto.esPrincipal) {
-                                        Spacer(Modifier.width(8.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = TealBadgeBg
-                                        ) {
-                                            Text(
-                                                text = "PRINCIPAL",
-                                                color = TealBadgeText,
-                                                fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = contacto.nombreCompleto,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                if (contacto.esPrincipal) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = TealBadgeBg
+                                    ) {
+                                        Text(
+                                            text = "PRINCIPAL",
+                                            color = TealBadgeText,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
                                     }
                                 }
-                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = "${contacto.parentesco} • ${contacto.telefono}",
                                     fontSize = 13.sp,
@@ -294,16 +315,19 @@ fun SaludApoyoScreenContent(
                                     )
                                 }
                             }
-                            IconButton(onClick = { onEliminarContacto(contacto.idContacto) }) {
+                            IconButton(
+                                onClick = { onEliminarContacto(contacto.idContacto) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Eliminar contacto",
-                                    tint = AlertRedText
+                                    tint = AlertRedText,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(14.dp))
                         Button(
                             onClick = {
                                 val intent = Intent(Intent.ACTION_DIAL).apply {
@@ -313,11 +337,22 @@ fun SaludApoyoScreenContent(
                             },
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = TealDark),
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
                         ) {
-                            Icon(Icons.Outlined.Phone, contentDescription = null, tint = Color.White)
+                            Icon(
+                                imageVector = Icons.Outlined.Phone,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(Modifier.width(8.dp))
-                            Text("Llamar a ${contacto.nombreCompleto}", fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Llamar a ${contacto.nombreCompleto.take(24)}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
                         }
                     }
                 }
@@ -332,7 +367,10 @@ fun SaludApoyoScreenContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Warning,
                         contentDescription = null,
@@ -341,10 +379,12 @@ fun SaludApoyoScreenContent(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Mis Alergias Registradas",
+                        text = "Mis Alergias",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 TextButton(onClick = { showDialogAlergia = true }) {
@@ -532,7 +572,11 @@ private fun DialogAlergia(
                 .fillMaxWidth(0.92f)
                 .padding(16.dp)
         ) {
-            Column(modifier = Modifier.padding(22.dp)) {
+            Column(
+                modifier = Modifier
+                    .padding(22.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -562,12 +606,17 @@ private fun DialogAlergia(
 
                 // Chips rápidos de sugerencia
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     listOf("Penicilina", "AINEs", "Sulfas", "Aspirina").forEach { chip ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = SoftWarmSurface,
-                            modifier = Modifier.clickable { sustancia = chip }
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { sustancia = chip }
                         ) {
                             Text(
                                 text = "+ $chip",
@@ -583,22 +632,32 @@ private fun DialogAlergia(
                 Spacer(Modifier.height(16.dp))
                 Text("Severidad:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     listOf("grave" to "Grave", "moderada" to "Moderada", "leve" to "Leve").forEach { (key, label) ->
                         val isSelected = severidad == key
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) TealDark else SoftWarmSurface,
                             border = if (isSelected) null else BorderStroke(1.dp, InputBorderColor),
-                            modifier = Modifier.clickable { severidad = key }
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { severidad = key }
                         ) {
-                            Text(
-                                text = label,
-                                fontSize = 12.5.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else TextPrimary,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                            )
+                            Box(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else TextPrimary
+                                )
+                            }
                         }
                     }
                 }
@@ -651,7 +710,11 @@ private fun DialogContacto(
                 .fillMaxWidth(0.92f)
                 .padding(16.dp)
         ) {
-            Column(modifier = Modifier.padding(22.dp)) {
+            Column(
+                modifier = Modifier
+                    .padding(22.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

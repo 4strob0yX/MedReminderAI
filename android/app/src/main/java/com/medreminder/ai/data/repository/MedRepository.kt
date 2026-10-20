@@ -1,9 +1,7 @@
 package com.medreminder.ai.data.repository
 
-import com.google.gson.Gson
 import com.medreminder.ai.data.remote.AlergiaCreateDto
 import com.medreminder.ai.data.remote.AlergiaDto
-import com.medreminder.ai.data.remote.ApiError
 import com.medreminder.ai.data.remote.ContactoApoyoCreateDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
 import com.medreminder.ai.data.remote.MedApi
@@ -11,10 +9,15 @@ import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.data.remote.MedicamentoCreateDto
 import com.medreminder.ai.data.remote.MedicamentoDto
 import com.medreminder.ai.data.remote.RecordatorioDto
+import com.medreminder.ai.data.remote.StockUpdateDto
 import com.medreminder.ai.data.remote.TratamientoCreateDto
 import com.medreminder.ai.data.remote.TratamientoDto
 import com.medreminder.ai.data.remote.VerificarAlergiasInDto
 import com.medreminder.ai.data.remote.VerificarAlergiasOutDto
+import com.medreminder.ai.data.remote.parseApiErrorDetail
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -23,35 +26,57 @@ data class DashboardBundle(
     val tratamientos: List<TratamientoDto>,
     val recordatoriosHoy: List<RecordatorioDto>,
     val alergias: List<AlergiaDto>,
-    val contactosApoyo: List<ContactoApoyoDto>
+    val contactosApoyo: List<ContactoApoyoDto>,
+    val nombreUsuario: String? = null
 )
 
 class MedRepository(private val api: MedApi) {
 
-    private val gson = Gson()
+    suspend fun cargarDashboard(
+        fechaUtc: String?,
+        tzOffsetMinutes: Int? = null
+    ): Result<DashboardBundle> = runCatching {
+        coroutineScope {
+            val medsDef = async { api.listarMedicamentos() }
+            val tratsDef = async { api.listarTratamientos() }
+            val recsDef = async { api.listarRecordatorios(fecha = fechaUtc, tzOffsetMinutes = tzOffsetMinutes) }
+            val alergiasDef = async {
+                runCatching { api.listarAlergias() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
+            }
+            val contactosDef = async {
+                runCatching { api.listarContactos() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
+            }
+            val perfilDef = async {
+                runCatching { api.obtenerPerfil() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+            }
 
-    suspend fun cargarDashboard(fechaUtc: String?): Result<DashboardBundle> = runCatching {
-        val medicamentos = api.listarMedicamentos()
-        val tratamientos = api.listarTratamientos()
-        val recordatorios = api.listarRecordatorios(fecha = fechaUtc)
-        val alergias = runCatching { api.listarAlergias() }.getOrDefault(emptyList())
-        val contactos = runCatching { api.listarContactos() }.getOrDefault(emptyList())
-        DashboardBundle(
-            medicamentos = medicamentos,
-            tratamientos = tratamientos,
-            recordatoriosHoy = recordatorios,
-            alergias = alergias,
-            contactosApoyo = contactos
-        )
-    }.recoverCatching { throw Exception(mapError(it)) }
+            DashboardBundle(
+                medicamentos = medsDef.await(),
+                tratamientos = tratsDef.await(),
+                recordatoriosHoy = recsDef.await(),
+                alergias = alergiasDef.await(),
+                contactosApoyo = contactosDef.await(),
+                nombreUsuario = perfilDef.await()?.nombre
+            )
+        }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun buscarCatalogo(query: String?): Result<List<MedicamentoCatalogoItemDto>> = runCatching {
         api.buscarCatalogo(query)
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun verificarAlergias(nombre: String, principioActivo: String?): Result<VerificarAlergiasOutDto> = runCatching {
         api.verificarAlergias(VerificarAlergiasInDto(nombre = nombre, principioActivo = principioActivo))
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun registrarMedicamentoConTratamiento(
         nombre: String,
@@ -61,7 +86,13 @@ class MedRepository(private val api: MedApi) {
         cantidadStock: Int,
         permitePosponer: Boolean,
         esCritico: Boolean,
-        contraindicaciones: String?
+        contraindicaciones: String?,
+        formaFarmaceutica: String = "comprimidos",
+        colorPastilla: String = "blanco",
+        instruccionesToma: String? = null,
+        proposito: String? = null,
+        fechaInicio: String? = null,
+        fechaFin: String? = null
     ): Result<MedicamentoDto> = runCatching {
         val med = api.crearMedicamento(
             MedicamentoCreateDto(
@@ -69,6 +100,11 @@ class MedRepository(private val api: MedApi) {
                 principioActivo = principioActivo?.trim()?.ifBlank { null },
                 dosis = dosis.trim(),
                 cantidadStock = cantidadStock,
+                stockInicial = cantidadStock,
+                formaFarmaceutica = formaFarmaceutica,
+                colorPastilla = colorPastilla,
+                instruccionesToma = instruccionesToma?.trim()?.ifBlank { null },
+                proposito = proposito?.trim()?.ifBlank { null },
                 permitePosponer = permitePosponer,
                 esCritico = esCritico,
                 contraindicaciones = contraindicaciones?.trim()?.ifBlank { null }
@@ -78,28 +114,81 @@ class MedRepository(private val api: MedApi) {
             TratamientoCreateDto(
                 idMedicamento = med.idMedicamento,
                 frecuenciaHoras = frecuenciaHoras,
+                fechaInicio = fechaInicio,
+                fechaFin = fechaFin,
                 estado = "activo"
             )
         )
         med
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun actualizarStockMedicamento(
+        idMedicamento: Int,
+        nuevoStock: Int,
+        medFallback: MedicamentoCreateDto? = null
+    ): Result<MedicamentoDto> = runCatching {
+        try {
+            api.actualizarStock(idMedicamento, StockUpdateDto(cantidadStock = nuevoStock))
+        } catch (e: HttpException) {
+            if ((e.code() == 404 || e.code() == 405) && medFallback != null) {
+                api.actualizarMedicamento(idMedicamento, medFallback.copy(cantidadStock = nuevoStock))
+            } else {
+                throw e
+            }
+        }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun eliminarMedicamento(idMedicamento: Int): Result<Unit> = runCatching {
+        val res = api.eliminarMedicamento(idMedicamento)
+        if (!res.isSuccessful && res.code() != 204) {
+            throw Exception("No se pudo eliminar el medicamento")
+        }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun tomarRecordatorio(idRecordatorio: Int): Result<RecordatorioDto> = runCatching {
         api.tomarRecordatorio(idRecordatorio)
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun posponerRecordatorio(idRecordatorio: Int): Result<RecordatorioDto> = runCatching {
         api.posponerRecordatorio(idRecordatorio)
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun omitirRecordatorio(idRecordatorio: Int): Result<RecordatorioDto> = runCatching {
         api.omitirRecordatorio(idRecordatorio)
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun revertirRecordatorio(idRecordatorio: Int): Result<RecordatorioDto> = runCatching {
+        api.revertirRecordatorio(idRecordatorio)
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     // --- Alergias ---
     suspend fun listarAlergias(): Result<List<AlergiaDto>> = runCatching {
         api.listarAlergias()
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun agregarAlergia(sustancia: String, severidad: String, reaccion: String?): Result<AlergiaDto> = runCatching {
         api.agregarAlergia(
@@ -109,19 +198,28 @@ class MedRepository(private val api: MedApi) {
                 reaccion = reaccion?.trim()?.ifBlank { null }
             )
         )
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun eliminarAlergia(idAlergia: Int): Result<Unit> = runCatching {
         val res = api.eliminarAlergia(idAlergia)
         if (!res.isSuccessful && res.code() != 204) {
             throw Exception("No se pudo eliminar la alergia")
         }
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     // --- Contactos de Apoyo ---
     suspend fun listarContactos(): Result<List<ContactoApoyoDto>> = runCatching {
         api.listarContactos()
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun guardarContacto(
         idContacto: Int?,
@@ -143,22 +241,29 @@ class MedRepository(private val api: MedApi) {
         } else {
             api.agregarContacto(dto)
         }
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     suspend fun eliminarContacto(idContacto: Int): Result<Unit> = runCatching {
         val res = api.eliminarContacto(idContacto)
         if (!res.isSuccessful && res.code() != 204) {
             throw Exception("No se pudo eliminar el contacto")
         }
-    }.recoverCatching { throw Exception(mapError(it)) }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
 
     private fun mapError(t: Throwable): String = when (t) {
         is HttpException -> {
             val raw = t.response()?.errorBody()?.string()
-            val detail = runCatching { gson.fromJson(raw, ApiError::class.java)?.detail }.getOrNull()
+            val detail = parseApiErrorDetail(raw)
             detail ?: "Error del servidor (${t.code()})"
         }
         is IOException -> "Sin conexión con el servidor. Verifica tu red."
         else -> t.message ?: "Error inesperado"
     }
 }
+

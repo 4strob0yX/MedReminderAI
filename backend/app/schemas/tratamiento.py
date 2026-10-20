@@ -27,6 +27,20 @@ class TratamientoCreate(BaseModel):
         return self
 
 
+class TratamientoUpdate(BaseModel):
+    frecuencia_horas: int | None = Field(default=None, gt=0, le=168)
+    fecha_inicio: datetime | None = None
+    fecha_fin: datetime | None = None
+    estado: Literal["activo", "inactivo"] | None = None
+
+    @field_validator("fecha_inicio", "fecha_fin")
+    @classmethod
+    def _a_utc_naive(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
+
+
 class TratamientoOut(BaseModel):
     id_tratamiento: int
     id_medicamento: int

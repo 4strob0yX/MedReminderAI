@@ -16,7 +16,12 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    if not plain or not hashed:
+        return False
+    try:
+        return _pwd_context.verify(plain, hashed)
+    except (ValueError, TypeError):
+        return False
 
 
 def _create_token(user_id: int, token_type: str, expires: timedelta) -> str:
