@@ -25,17 +25,18 @@ class NetworkModule(private val tokenStore: TokenStore) {
 
     companion object {
         // Direcciones candidatas en red local de desarrollo:
-        // 192.168.0.242: IP Wi-Fi de la máquina host (permite usar el móvil sin cable USB)
+        // 192.168.0.228: IP Wi-Fi actual de la máquina host en la red local
+        // 192.168.0.242: IP Wi-Fi previa de la máquina host
         // 127.0.0.1: Conexión mediante adb reverse sobre USB
         // 10.0.2.2: Loopback estándar del emulador de Android Studio
-        val CANDIDATE_HOSTS = listOf("192.168.0.242", "127.0.0.1", "10.0.2.2")
+        val CANDIDATE_HOSTS = listOf("192.168.0.228", "192.168.0.242", "127.0.0.1", "10.0.2.2")
         @Volatile
         var activeHost: String? = null
     }
 
     init {
         if (activeHost == null) {
-            activeHost = tokenStore.lastWorkingHost ?: "192.168.0.242"
+            activeHost = tokenStore.lastWorkingHost ?: "192.168.0.228"
         }
     }
 
@@ -50,6 +51,8 @@ class NetworkModule(private val tokenStore: TokenStore) {
         }
 
         val hostsToTry = linkedSetOf<String>()
+        // Priorizar la IP activa del Mac host para evitar bloqueos por DHCP dinámico
+        hostsToTry.add("192.168.0.228")
         activeHost?.let { hostsToTry.add(it) }
         tokenStore.lastWorkingHost?.let { hostsToTry.add(it) }
         hostsToTry.addAll(CANDIDATE_HOSTS)
@@ -59,7 +62,9 @@ class NetworkModule(private val tokenStore: TokenStore) {
             val candidateUrl = originalUrl.newBuilder().host(candidate).build()
             val candidateRequest = originalRequest.newBuilder().url(candidateUrl).build()
             try {
-                val response = chain.proceed(candidateRequest)
+                // Timeout rápido de conexión (1.8s) al sondear candidatos alternativos para no colgar la UI
+                val candidateChain = if (candidate == activeHost) chain else chain.withConnectTimeout(1800, TimeUnit.MILLISECONDS)
+                val response = candidateChain.proceed(candidateRequest)
                 if (activeHost != candidate) {
                     activeHost = candidate
                     tokenStore.lastWorkingHost = candidate
