@@ -14,8 +14,8 @@ val TealBadgeBg = Color(0xFFD0F3F6)
 val TealBadgeText = Color(0xFF05505F)
 val CyanIconBg = Color(0xFFB5ECFC)
 val CyanIconTint = Color(0xFF0B4F60)
-val AuroraCyan = Color(0xFF00E5FF)
-val AuroraMint = Color(0xFF38EF7D)
+val AuroraCyan = Color(0xFF2DD4BF)
+val AuroraMint = Color(0xFF10B981)
 val AuroraViolet = Color(0xFF7C4DFF)
 
 // Superficies de neblina fría con leve tinte aqua
@@ -94,8 +94,8 @@ val HighContrastNightSurface = Color(0xFF0D1215)
 val HighContrastNightText = Color(0xFFFFFFFF)
 val HighContrastNightSecondary = Color(0xFFCBD5E1)
 val HighContrastNightAccent = Color(0xFFFFD600)
-val HighContrastNightTeal = Color(0xFF00E5FF)
-val HighContrastNightBorder = Color(0xFF00E5FF)
+val HighContrastNightTeal = Color(0xFF2DD4BF)
+val HighContrastNightBorder = Color(0xFF2DD4BF)
 
 // Compatibilidad Material 3 plantilla base
 val Purple80 = Color(0xFFD0BCFF)

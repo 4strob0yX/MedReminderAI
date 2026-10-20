@@ -170,7 +170,7 @@ fun MediSplashScreen(
                 val r1 = maxRadius * pulseProgress1
                 val a1 = (1f - pulseProgress1).coerceIn(0f, 1f) * 0.35f
                 drawCircle(
-                    color = Color(0xFF00E5FF).copy(alpha = a1),
+                    color = Color(0xFF2DD4BF).copy(alpha = a1),
                     radius = r1,
                     center = Offset(cx, cy),
                     style = Stroke(width = (2.2.dp * (1f - pulseProgress1 * 0.5f)).toPx())
@@ -280,7 +280,7 @@ fun MediSplashScreen(
                                     Brush.horizontalGradient(
                                         colors = listOf(
                                             TealPrimary.copy(alpha = 0.2f),
-                                            Color(0xFF00E5FF),
+                                            Color(0xFF2DD4BF),
                                             TealPrimary.copy(alpha = 0.2f)
                                         ),
                                         startX = shimmerOffset * 300f,

@@ -395,7 +395,7 @@ private fun DrawScope.drawIconicMedi(
     val shadowH = h * 0.10f
     val shadowY = h * 0.93f
     val shadowColor = if (isHighContrast) {
-        if (isDark) Color(0xFF00E5FF).copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.18f)
+        if (isDark) Color(0xFF2DD4BF).copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.18f)
     } else {
         TealPrimary.copy(alpha = 0.22f)
     }
@@ -412,7 +412,7 @@ private fun DrawScope.drawIconicMedi(
 
     val earBrush = Brush.verticalGradient(
         colors = if (isHighContrast && isDark) {
-            listOf(Color(0xFF00E5FF), Color(0xFF005662))
+            listOf(Color(0xFF2DD4BF), Color(0xFF005662))
         } else if (isHighContrast) {
             listOf(Color.White, Color(0xFFEEEEEE))
         } else {
@@ -420,7 +420,7 @@ private fun DrawScope.drawIconicMedi(
         }
     )
     val earBorderColor = if (isHighContrast) {
-        if (isDark) Color(0xFF00E5FF) else Color.Black
+        if (isDark) Color(0xFF2DD4BF) else Color.Black
     } else {
         TealDark
     }
@@ -460,7 +460,7 @@ private fun DrawScope.drawIconicMedi(
     val beaconRadius = w * 0.055f
     val beaconGlowRadius = beaconRadius * 1.8f
     val beaconColor = if (isHighContrast && isDark) {
-        Color(0xFF00E5FF)
+        Color(0xFF2DD4BF)
     } else if (isHighContrast) {
         Color.Black
     } else if (mood == MediMood.SAD) {
@@ -468,9 +468,9 @@ private fun DrawScope.drawIconicMedi(
     } else if (mood == MediMood.SLEEPY) {
         Color(0xFFB39DDB)
     } else if (mood == MediMood.DRAGGING || mood == MediMood.HAPPY || mood == MediMood.CELEBRATING) {
-        Color(0xFFFFD600)
+        Color(0xFFFFB703)
     } else {
-        Color(0xFF00E5FF)
+        Color(0xFF14B8A6)
     }
 
     drawCircle(
@@ -531,14 +531,14 @@ private fun DrawScope.drawIconicMedi(
     drawPath(bodyPath, brush = bodyBrush)
     drawPath(
         bodyPath,
-        color = if (isHighContrast) (if (isDark) Color(0xFF00E5FF) else Color.Black) else TealDark,
+        color = if (isHighContrast) (if (isDark) Color(0xFF2DD4BF) else Color.Black) else TealDark,
         style = Stroke(width = if (isHighContrast) 2.4.dp.toPx() else 1.8.dp.toPx())
     )
 
     // Anillo sutil divisorio de cintura
     val waistY = bodyTop + bodyH * 0.54f
     drawLine(
-        color = if (isHighContrast) (if (isDark) Color(0xFF00E5FF) else Color.Black) else Color(0xFF80CBC4),
+        color = if (isHighContrast) (if (isDark) Color(0xFF2DD4BF) else Color.Black) else Color(0xFF80CBC4),
         start = Offset(bodyLeft + 4.dp.toPx(), waistY),
         end = Offset(bodyLeft + bodyW - 4.dp.toPx(), waistY),
         strokeWidth = 1.2.dp.toPx()
@@ -595,13 +595,13 @@ private fun DrawScope.drawIconicMedi(
     val rightEyeCenter = Offset(cx + eyeSpacing + gazeShiftX, visorTop + visorH * 0.52f + gazeShiftY)
 
     val eyeGlowColor = when {
-        isHighContrast && isDark -> Color(0xFF00E5FF)
+        isHighContrast && isDark -> Color(0xFF2DD4BF)
         isHighContrast -> Color.White
-        mood == MediMood.HAPPY || mood == MediMood.CELEBRATING -> Color(0xFF38EF7D)
+        mood == MediMood.HAPPY || mood == MediMood.CELEBRATING -> Color(0xFF10B981)
         mood == MediMood.SAD -> Color(0xFF82B1FF)
         mood == MediMood.SLEEPY -> Color(0xFFB39DDB)
-        mood == MediMood.DRAGGING -> Color(0xFF00E5FF)
-        else -> Color(0xFF00E5FF)
+        mood == MediMood.DRAGGING -> Color(0xFF2DD4BF)
+        else -> Color(0xFF14B8A6)
     }
 
     if (mood == MediMood.SLEEPY) {
@@ -725,7 +725,7 @@ private fun DrawScope.drawIconicMedi(
     }
 
     if (mood == MediMood.CELEBRATING) {
-        val colors = listOf(Color(0xFFFFD600), Color(0xFF00E5FF), Color(0xFF38EF7D))
+        val colors = listOf(Color(0xFFFFB703), Color(0xFF14B8A6), Color(0xFF10B981))
         for (i in 0 until 6) {
             val t = (sparkleT + i / 6f) % 1f
             val ang = Math.toRadians((i * 60 + 15).toDouble())
@@ -777,7 +777,7 @@ private fun DrawScope.drawIconicMedi(
     val coreGlowRadius = coreBaseRadius * heartPulse
 
     val coreGlowColor = if (isHighContrast && isDark) {
-        Color(0xFF00E5FF)
+        Color(0xFF2DD4BF)
     } else if (isHighContrast) {
         Color.Black
     } else {
@@ -1387,7 +1387,7 @@ fun DraggableMediCompanion(
                 color = Color(0xEE0B1519),
                 border = BorderStroke(
                     1.dp,
-                    Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF38EF7D)))
+                    Brush.linearGradient(listOf(Color(0xFF2DD4BF), Color(0xFF0F766E)))
                 ),
                 shadowElevation = 8.dp,
                 modifier = Modifier.widthIn(max = 230.dp)
@@ -1575,7 +1575,7 @@ fun buildClinicalDossier(query: String, nombreUsuario: String): MediClinicalDoss
                 title = "Guía de Hidratación y Disolución",
                 category = "ADMINISTRACIÓN EFICAZ",
                 riskLevel = "INFORMATIVO · RECOMENDADO",
-                riskColor = Color(0xFF00E5FF),
+                riskColor = Color(0xFF14B8A6),
                 riskScore = 0.25f,
                 keyInsight = "El volumen y tipo de líquido determinan la velocidad de disolución y protegen la mucosa del esófago y estómago.",
                 points = listOf(

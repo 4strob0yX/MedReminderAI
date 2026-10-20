@@ -321,9 +321,9 @@ private fun LoginContent(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                if (a11y.isDarkTheme) Color(0xFF00E5FF).copy(alpha = pulseAlpha)
+                                if (a11y.isDarkTheme) Color(0xFF2DD4BF).copy(alpha = pulseAlpha)
                                 else TealPrimary.copy(alpha = pulseAlpha),
-                                if (a11y.isDarkTheme) Color(0xFF00E5FF).copy(alpha = pulseAlpha * 0.3f)
+                                if (a11y.isDarkTheme) Color(0xFF2DD4BF).copy(alpha = pulseAlpha * 0.3f)
                                 else TealPrimary.copy(alpha = pulseAlpha * 0.3f),
                                 Color.Transparent
                             ),
@@ -391,7 +391,7 @@ private fun LoginContent(
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(if (a11y.isDarkTheme) Color(0xFF00E5FF) else Color(0xFF2E7D32))
+                                    .background(if (a11y.isDarkTheme) Color(0xFF10B981) else Color(0xFF2E7D32))
                             )
                         }
                         Spacer(Modifier.height(2.dp))
@@ -431,7 +431,7 @@ private fun LoginContent(
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                tint = if (a11y.isDarkTheme) Color(0xFF00E5FF) else TealDark,
+                                tint = if (a11y.isDarkTheme) Color(0xFF2DD4BF) else TealDark,
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(Modifier.width(4.dp))
@@ -512,7 +512,7 @@ private fun LoginContent(
                         text = "¿La olvidaste?",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (a11y.isDarkTheme) Color(0xFF00E5FF) else TealPrimary
+                        color = if (a11y.isDarkTheme) Color(0xFF2DD4BF) else TealPrimary
                     )
                 }
             }
@@ -591,7 +591,7 @@ private fun LoginContent(
                         }
                         withStyle(
                             SpanStyle(
-                                color = if (a11y.isDarkTheme) Color(0xFF00E5FF) else TealDark,
+                                color = if (a11y.isDarkTheme) Color(0xFF2DD4BF) else TealDark,
                                 fontWeight = FontWeight.Bold,
                                 textDecoration = TextDecoration.Underline
                             )
