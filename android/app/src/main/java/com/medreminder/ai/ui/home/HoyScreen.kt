@@ -537,8 +537,8 @@ fun AuroraBackdrop(modifier: Modifier = Modifier) {
             radius = r,
             center = Offset(cx, cy)
         )
-        glow(Color(0xFF00E5FF), w * 0.22f, h * 0.08f, 0.16f)
-        glow(Color(0xFF38EF7D), w * 0.82f, h * 0.58f, 0.11f)
+        glow(Color(0xFF2DD4BF), w * 0.22f, h * 0.08f, 0.16f)
+        glow(Color(0xFF10B981), w * 0.82f, h * 0.58f, 0.11f)
         glow(Color(0xFF7C4DFF), w * 0.28f, h * 0.92f, 0.08f)
     }
 }
@@ -870,7 +870,7 @@ fun ClinicalBottomBar(
         Surface(
             shape = RoundedCornerShape(32.dp),
             color = if (a11y.isDarkTheme) Color(0xF20F172A) else Color(0xF5FFFFFF),
-            border = BorderStroke(1.dp, if (a11y.isDarkTheme) Color(0x3300E5FF) else Color(0x330F766E)),
+            border = BorderStroke(1.dp, if (a11y.isDarkTheme) Color(0x332DD4BF) else Color(0x330F766E)),
             shadowElevation = 16.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -2257,7 +2257,7 @@ fun SwipeToConfirmTrack(
             .background(if (enabled || inFlight) Color(0xFF0B1F24) else Color(0xFFCFD8DC))
             .border(
                 1.dp,
-                if (enabled || inFlight) Brush.horizontalGradient(listOf(Color(0xFF00E5FF), Color(0xFF38EF7D)))
+                if (enabled || inFlight) Brush.horizontalGradient(listOf(Color(0xFF2DD4BF), Color(0xFF10B981)))
                 else Brush.horizontalGradient(listOf(Color(0xFFB0BEC5), Color(0xFFB0BEC5))),
                 RoundedCornerShape(50)
             )
@@ -2270,7 +2270,7 @@ fun SwipeToConfirmTrack(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(thumbSize + pad * 2 + with(density) { offset.value.toDp() })
-                .background(Brush.horizontalGradient(listOf(Color(0x3300E5FF), Color(0x9938EF7D))))
+                .background(Brush.horizontalGradient(listOf(Color(0x332DD4BF), Color(0x9910B981))))
         )
 
         Text(
@@ -2297,7 +2297,7 @@ fun SwipeToConfirmTrack(
                 .size(thumbSize)
                 .clip(CircleShape)
                 .background(
-                    if (enabled || inFlight) Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF14B8A6)))
+                    if (enabled || inFlight) Brush.linearGradient(listOf(Color(0xFF2DD4BF), Color(0xFF14B8A6)))
                     else Brush.linearGradient(listOf(Color(0xFF90A4AE), Color(0xFF78909C)))
                 )
                 .pointerInput(enabled, maxPx) {
