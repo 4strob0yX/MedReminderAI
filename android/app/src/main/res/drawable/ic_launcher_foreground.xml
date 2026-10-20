@@ -5,24 +5,32 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Círculo central azul medio -->
-    <path
-        android:fillColor="#3A6D94"
-        android:pathData="M54,54m-29,0a29,29 0,1 1,58 0a29,29 0,1 1,-58 0" />
+    <!-- Cápsula minimalista inclinada (-36 grados) con separación sutil para silueta monocroma nítida -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-36">
+        <!-- Mitad superior blanca cálida -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M43,39A11,11 0,0 1,65 39L65,52.8L43,52.8Z" />
+        <!-- Mitad inferior verde menta (#A8E6CF) -->
+        <path
+            android:fillColor="#A8E6CF"
+            android:pathData="M43,55.2L65,55.2L65,69A11,11 0,0 1,43 69Z" />
+    </group>
 
-    <!-- Barra vertical de la cruz blanca redondeada -->
+    <!-- Punto vital orgánico menta arriba a la derecha -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,31A6,6 0,0 1,60 37L60,71A6,6 0,0 1,48 71L48,37A6,6 0,0 1,54 31Z" />
+        android:fillColor="#A8E6CF"
+        android:pathData="M73,35m-4.5,0a4.5,4.5 0,1 1,9 0a4.5,4.5 0,1 1,-9 0" />
 
-    <!-- Barra horizontal de la cruz blanca redondeada -->
+    <!-- Arco de pulso vital minimalista abajo a la derecha -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M31,54A6,6 0,0 1,37 48L71,48A6,6 0,0 1,71 60L37,60A6,6 0,0 1,31 54Z" />
-
-    <!-- Estrella de 4 puntas lavanda/periwinkle arriba a la derecha -->
-    <path
-        android:fillColor="#A2ACFA"
-        android:pathData="M74,26L76.6,34.4L85,37L76.6,39.6L74,48L71.4,39.6L63,37L71.4,34.4Z" />
+        android:fillColor="#00000000"
+        android:pathData="M64,76Q77,75 78,62"
+        android:strokeWidth="4.2"
+        android:strokeColor="#A8E6CF"
+        android:strokeLineCap="round" />
 
 </vector>

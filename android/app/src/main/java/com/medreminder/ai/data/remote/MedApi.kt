@@ -4,6 +4,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -11,11 +12,29 @@ import retrofit2.http.Query
 
 interface MedApi {
 
+    @GET("auth/me")
+    suspend fun obtenerPerfil(): UsuarioDto
+
     @POST("medicamentos")
     suspend fun crearMedicamento(@Body body: MedicamentoCreateDto): MedicamentoDto
 
     @GET("medicamentos")
     suspend fun listarMedicamentos(): List<MedicamentoDto>
+
+    @PUT("medicamentos/{id}")
+    suspend fun actualizarMedicamento(
+        @Path("id") idMedicamento: Int,
+        @Body body: MedicamentoCreateDto
+    ): MedicamentoDto
+
+    @PATCH("medicamentos/{id}/stock")
+    suspend fun actualizarStock(
+        @Path("id") idMedicamento: Int,
+        @Body body: StockUpdateDto
+    ): MedicamentoDto
+
+    @DELETE("medicamentos/{id}")
+    suspend fun eliminarMedicamento(@Path("id") idMedicamento: Int): Response<Unit>
 
     @GET("medicamentos/catalogo")
     suspend fun buscarCatalogo(@Query("q") query: String? = null): List<MedicamentoCatalogoItemDto>
@@ -30,7 +49,10 @@ interface MedApi {
     suspend fun listarTratamientos(): List<TratamientoDto>
 
     @GET("recordatorios")
-    suspend fun listarRecordatorios(@Query("fecha") fecha: String? = null): List<RecordatorioDto>
+    suspend fun listarRecordatorios(
+        @Query("fecha") fecha: String? = null,
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): List<RecordatorioDto>
 
     @POST("recordatorios/{id}/tomar")
     suspend fun tomarRecordatorio(@Path("id") idRecordatorio: Int): RecordatorioDto
@@ -40,6 +62,9 @@ interface MedApi {
 
     @POST("recordatorios/{id}/omitir")
     suspend fun omitirRecordatorio(@Path("id") idRecordatorio: Int): RecordatorioDto
+
+    @POST("recordatorios/{id}/revertir")
+    suspend fun revertirRecordatorio(@Path("id") idRecordatorio: Int): RecordatorioDto
 
     // --- Sistema de Alergias ---
     @GET("alergias")
@@ -67,3 +92,4 @@ interface MedApi {
     @DELETE("contactos-apoyo/{id}")
     suspend fun eliminarContacto(@Path("id") idContacto: Int): Response<Unit>
 }
+

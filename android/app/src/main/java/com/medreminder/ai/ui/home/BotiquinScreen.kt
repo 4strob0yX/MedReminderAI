@@ -3,6 +3,7 @@ package com.medreminder.ai.ui.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,14 +28,24 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Healing
 import androidx.compose.material.icons.outlined.MedicalInformation
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Vaccines
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +54,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.medreminder.ai.ui.theme.AlertRedBg
@@ -65,7 +77,9 @@ import com.medreminder.ai.ui.theme.TextSecondary
 @Composable
 fun BotiquinScreenContent(
     state: HomeUiState,
-    onAddMedicamentoClick: () -> Unit
+    onAddMedicamentoClick: () -> Unit,
+    onRecargarStock: (Int, Int) -> Unit = { _, _ -> },
+    onEliminarMedicamento: (Int) -> Unit = {}
 ) {
     val totalMeds = state.botiquinItems.size
 
@@ -85,31 +99,66 @@ fun BotiquinScreenContent(
                     ) {
                         Text(
                             text = "Mi Botiquín",
-                            fontSize = 28.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = TealBadgeBg
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = TealPrimary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { onAddMedicamentoClick() }
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(TealPrimary)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "Al día",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TealBadgeText
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "Agregar",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = TealBadgeBg
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(TealPrimary)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Al día",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TealBadgeText
+                                    )
+                                }
                             }
                         }
                     }
@@ -209,28 +258,17 @@ fun BotiquinScreenContent(
                 }
             } else {
                 itemsIndexed(state.botiquinItems, key = { _, it -> it.idMedicamento }) { index, item ->
-                    BotiquinMedCard(item = item, iconIndex = index)
+                    BotiquinMedCard(
+                        item = item,
+                        iconIndex = index,
+                        onRecargarStock = { onRecargarStock(item.idMedicamento, 30) },
+                        onEliminarMedicamento = { onEliminarMedicamento(item.idMedicamento) }
+                    )
                 }
             }
         }
 
-        // Botón flotante circular "+" (>= 56dp)
-        FloatingActionButton(
-            onClick = onAddMedicamentoClick,
-            shape = CircleShape,
-            containerColor = TealPrimary,
-            contentColor = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 24.dp)
-                .size(64.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Agregar Medicamento",
-                modifier = Modifier.size(30.dp)
-            )
-        }
+
     }
 }
 
@@ -267,7 +305,12 @@ private fun SupplyRingIndicator(count: Int, progress: Float) {
 }
 
 @Composable
-private fun BotiquinMedCard(item: BotiquinItemUi, iconIndex: Int) {
+private fun BotiquinMedCard(
+    item: BotiquinItemUi,
+    iconIndex: Int,
+    onRecargarStock: () -> Unit = {},
+    onEliminarMedicamento: () -> Unit = {}
+) {
     val isBajo = item.nivel == StockNivel.BAJO
     val badgeBg = if (isBajo) AlertRedBg else SoftWarmSurface
     val badgeTextCol = if (isBajo) AlertRedText else TextPrimary
@@ -333,6 +376,8 @@ private fun BotiquinMedCard(item: BotiquinItemUi, iconIndex: Int) {
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = badgeTextCol,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                     )
                 }
@@ -345,7 +390,7 @@ private fun BotiquinMedCard(item: BotiquinItemUi, iconIndex: Int) {
                     color = Color(0xFFFFEBEE)
                 ) {
                     Text(
-                        text = "🚨 DOSIS CRÍTICA • NO POSPONIBLE",
+                        text = "DOSIS CRÍTICA • NO POSPONIBLE",
                         color = Color(0xFFC62828),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -392,6 +437,66 @@ private fun BotiquinMedCard(item: BotiquinItemUi, iconIndex: Int) {
                         .clip(RoundedCornerShape(50))
                         .background(progressColor)
                 )
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // Acciones: Recargar stock y Eliminar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onRecargarStock,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TealPrimary),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AddCircleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(text = "Recargar (30)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                var showConfirmDelete by remember { mutableStateOf(false) }
+                IconButton(
+                    onClick = { showConfirmDelete = true },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Eliminar",
+                        tint = Color(0xFFC62828),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                if (showConfirmDelete) {
+                    AlertDialog(
+                        onDismissRequest = { showConfirmDelete = false },
+                        title = { Text("Eliminar medicamento", fontWeight = FontWeight.Bold) },
+                        text = { Text("¿Deseas eliminar ${item.nombre} de tu botiquín? Se detendrán sus recordatorios.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showConfirmDelete = false
+                                onEliminarMedicamento()
+                            }) {
+                                Text("Eliminar", color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showConfirmDelete = false }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
