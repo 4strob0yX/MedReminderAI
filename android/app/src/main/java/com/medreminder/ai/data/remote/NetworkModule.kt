@@ -25,18 +25,54 @@ class NetworkModule(private val tokenStore: TokenStore) {
 
     companion object {
         // Direcciones candidatas en red local de desarrollo:
-        // 192.168.0.228: IP Wi-Fi actual de la máquina host en la red local
-        // 192.168.0.242: IP Wi-Fi previa de la máquina host
-        // 127.0.0.1: Conexión mediante adb reverse sobre USB
-        // 10.0.2.2: Loopback estándar del emulador de Android Studio
-        val CANDIDATE_HOSTS = listOf("192.168.0.228", "192.168.0.242", "127.0.0.1", "10.0.2.2")
+        val BASE_CANDIDATES = listOf(
+            "172.20.10.2",   // Mac host actual (Hotspot / Red actual)
+            "192.168.0.228", // Mac host en red de hogar
+            "192.168.0.242",
+            "127.0.0.1",     // Conexión mediante adb reverse sobre USB
+            "10.0.2.2"       // Loopback estándar del emulador de Android Studio
+        )
+
         @Volatile
         var activeHost: String? = null
+
+        /** Detecta dinámicamente el prefijo de la subred local (ej. 172.20.10. o 192.168.0.) para probar IPs comunes. */
+        fun detectSubnetCandidates(): List<String> {
+            val list = mutableListOf<String>()
+            try {
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return list
+                for (intf in interfaces) {
+                    if (!intf.isUp || intf.isLoopback) continue
+                    val addrs = intf.inetAddresses ?: continue
+                    for (addr in addrs) {
+                        if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                            val ip = addr.hostAddress ?: continue
+                            if (ip.startsWith("192.168.") || ip.startsWith("172.") || ip.startsWith("10.")) {
+                                val dot = ip.lastIndexOf('.')
+                                if (dot != -1) {
+                                    val prefix = ip.substring(0, dot + 1)
+                                    list.add("${prefix}2")
+                                    list.add("${prefix}1")
+                                    list.add("${prefix}228")
+                                    list.add("${prefix}242")
+                                    list.add("${prefix}100")
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            return list
+        }
+
+        fun getAllCandidates(): List<String> {
+            return (listOf("172.20.10.2") + detectSubnetCandidates() + BASE_CANDIDATES).distinct()
+        }
     }
 
     init {
         if (activeHost == null) {
-            activeHost = tokenStore.lastWorkingHost ?: "192.168.0.228"
+            activeHost = tokenStore.lastWorkingHost ?: "172.20.10.2"
         }
     }
 
@@ -45,25 +81,25 @@ class NetworkModule(private val tokenStore: TokenStore) {
         val originalUrl = originalRequest.url
         val currentHost = originalUrl.host
 
-        val isLocalDev = currentHost in CANDIDATE_HOSTS || currentHost == "localhost"
+        val allCandidates = getAllCandidates()
+        val isLocalDev = currentHost in allCandidates || currentHost == "localhost"
         if (!isLocalDev) {
             return@Interceptor chain.proceed(originalRequest)
         }
 
         val hostsToTry = linkedSetOf<String>()
-        // Priorizar la IP activa del Mac host para evitar bloqueos por DHCP dinámico
-        hostsToTry.add("192.168.0.228")
+        // Priorizar el host manual o el último funcional
         activeHost?.let { hostsToTry.add(it) }
         tokenStore.lastWorkingHost?.let { hostsToTry.add(it) }
-        hostsToTry.addAll(CANDIDATE_HOSTS)
+        hostsToTry.addAll(allCandidates)
 
         var lastException: IOException? = null
         for (candidate in hostsToTry) {
             val candidateUrl = originalUrl.newBuilder().host(candidate).build()
             val candidateRequest = originalRequest.newBuilder().url(candidateUrl).build()
             try {
-                // Timeout rápido de conexión (1.8s) al sondear candidatos alternativos para no colgar la UI
-                val candidateChain = if (candidate == activeHost) chain else chain.withConnectTimeout(1800, TimeUnit.MILLISECONDS)
+                // Timeout rápido de conexión (1.4s) al sondear candidatos alternativos para no colgar la UI
+                val candidateChain = if (candidate == activeHost) chain else chain.withConnectTimeout(1400, TimeUnit.MILLISECONDS)
                 val response = candidateChain.proceed(candidateRequest)
                 if (activeHost != candidate) {
                     activeHost = candidate
