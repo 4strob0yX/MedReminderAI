@@ -3,6 +3,7 @@ package com.medreminder.ai.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.medreminder.ai.data.remote.AiChatResponseDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
@@ -562,6 +563,109 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             val alergiaRes = repository.verificarAlergias(nombre = item.nombre, principioActivo = item.principioActivo)
             val alerta = alergiaRes.getOrNull()?.let { if (it.tieneConflicto) it.alerta?.cleanClinicalText() else null }
             _state.update { it.copy(form = it.form.copy(alertaAlergia = alerta)) }
+        }
+    }
+
+    /**
+     * Consulta en vivo al motor Ollama (`medi-clinico`) desde la mascota Medi.
+     */
+    suspend fun consultarMediAi(query: String, contextoPantalla: String = "Hoy"): AiChatResponseDto? {
+        val nombreActual = _state.value.nombreUsuario.ifBlank { "Paciente" }
+        return repository.consultarMediAi(
+            query = query,
+            nombreUsuario = nombreActual,
+            contextoPantalla = contextoPantalla
+        ).getOrNull()
+    }
+
+    /**
+     * Acción del botón "Sugerencias IA" en Nuevo Medicamento:
+     * - Si el usuario ya escribió un nombre de medicamento, invoca al motor Ollama `medi-clinico`
+     *   (/ai/sugerir-medicamento) para autocompletar principio activo, dosis, horario, forma, color e interacciones.
+     * - Si el campo está vacío, despliega las sugerencias principales del catálogo farmacológico.
+     */
+    fun onSolicitarSugerenciasIa() {
+        val nombreActual = _state.value.form.nombre.trim()
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _state.update { it.copy(form = it.form.copy(isBuscandoCatalogo = true)) }
+            if (nombreActual.isBlank()) {
+                val catRes = repository.buscarCatalogo(null)
+                val lista = catRes.getOrDefault(emptyList())
+                _state.update {
+                    it.copy(
+                        form = it.form.copy(
+                            catalogoSugerencias = lista,
+                            isBuscandoCatalogo = false
+                        ),
+                        snackbarMessage = if (lista.isNotEmpty()) {
+                            "Sugerencias IA: selecciona un medicamento o escribe su nombre"
+                        } else {
+                            "Escribe el nombre del medicamento para autocompletar con IA"
+                        }
+                    )
+                }
+                return@launch
+            }
+
+            val aiRes = repository.sugerirMedicamentoAi(nombreActual).getOrNull()
+            if (aiRes != null) {
+                val formaEncontrada = FormaFarmaceutica.fromString(aiRes.formaFarmaceutica)
+                val esCritico = aiRes.esCriticoDefecto
+                val permitePosponer = !esCritico
+                val freqHoras = aiRes.frecuenciaHorasSugerida.coerceIn(4, 24)
+                val freqLabel = when (freqHoras) {
+                    6 -> "Cada 6 horas"
+                    8 -> "Cada 8 horas"
+                    12 -> "Cada 12 horas"
+                    24 -> "1 vez al día"
+                    else -> "Cada $freqHoras horas"
+                }
+                val interaccionLocal = evaluarInteraccionConBotiquin(aiRes.nombre, aiRes.principioActivo)
+                _state.update {
+                    it.copy(
+                        form = it.form.copy(
+                            nombre = aiRes.nombre,
+                            principioActivo = aiRes.principioActivo,
+                            dosis = aiRes.dosisSugerida,
+                            frecuenciaHoras = freqHoras,
+                            frecuenciaTexto = freqLabel,
+                            forma = formaEncontrada,
+                            colorPastilla = aiRes.colorSugerido.ifBlank { it.form.colorPastilla },
+                            instruccionesToma = aiRes.instruccionesToma.ifBlank { it.form.instruccionesToma },
+                            contraindicaciones = aiRes.contraindicaciones,
+                            esCritico = esCritico,
+                            permitePosponer = permitePosponer,
+                            alertaAlergia = aiRes.alertaAlergia?.cleanClinicalText(),
+                            alertaInteraccion = (aiRes.alertaInteraccion ?: interaccionLocal)?.cleanClinicalText(),
+                            catalogoSugerencias = emptyList(),
+                            isBuscandoCatalogo = false,
+                            nombreError = null,
+                            dosisError = null
+                        ),
+                        snackbarMessage = "IA (${aiRes.modelUsed}): ficha de ${aiRes.nombre} autocompletada"
+                    )
+                }
+            } else {
+                val catRes = repository.buscarCatalogo(nombreActual)
+                val sugerencias = catRes.getOrDefault(emptyList())
+                if (sugerencias.isNotEmpty()) {
+                    onSelectCatalogoSugerencia(sugerencias.first())
+                    _state.update {
+                        it.copy(
+                            form = it.form.copy(isBuscandoCatalogo = false),
+                            snackbarMessage = "Ficha clínica autocompletada para ${sugerencias.first().nombre}"
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            form = it.form.copy(isBuscandoCatalogo = false),
+                            snackbarMessage = "Completa la dosis manualmente para '$nombreActual'"
+                        )
+                    }
+                }
+            }
         }
     }
 

@@ -72,6 +72,7 @@ import com.medreminder.ai.ui.theme.CardBackground
 import com.medreminder.ai.ui.theme.CyanIconBg
 import com.medreminder.ai.ui.theme.CyanIconTint
 import com.medreminder.ai.ui.theme.InputBorderColor
+import com.medreminder.ai.ui.theme.LocalAccessibilitySettings
 import com.medreminder.ai.ui.theme.SoftWarmSurface
 import com.medreminder.ai.ui.theme.TealBadgeBg
 import com.medreminder.ai.ui.theme.TealBadgeText
@@ -91,6 +92,7 @@ fun SaludApoyoScreenContent(
     onEliminarContacto: (Int) -> Unit
 ) {
     val context = LocalContext.current
+    val a11y = LocalAccessibilitySettings.current
     var showDialogAlergia by remember { mutableStateOf(false) }
     var showDialogContacto by remember { mutableStateOf(false) }
 
@@ -103,7 +105,8 @@ fun SaludApoyoScreenContent(
         item {
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = SoftWarmSurface,
+                color = a11y.adaptiveSoftSurface,
+                border = BorderStroke(1.dp, a11y.adaptiveBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -142,13 +145,13 @@ fun SaludApoyoScreenContent(
                         text = "Alergias y Contacto de Apoyo",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
+                        color = a11y.adaptiveTextPrimary
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
                         text = "Validación cruzada de alergias y enlace rápido con tu red de cuidadores ante dosis críticas.",
                         fontSize = 12.5.sp,
-                        color = TextSecondary,
+                        color = a11y.adaptiveTextSecondary,
                         lineHeight = 17.sp
                     )
                 }
@@ -169,7 +172,7 @@ fun SaludApoyoScreenContent(
                     Icon(
                         imageVector = Icons.Outlined.ContactPhone,
                         contentDescription = null,
-                        tint = TealDark,
+                        tint = TealPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -177,7 +180,7 @@ fun SaludApoyoScreenContent(
                         text = "Contacto de Apoyo",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
+                        color = a11y.adaptiveTextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -194,8 +197,8 @@ fun SaludApoyoScreenContent(
             item {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = CardBackground,
-                    border = BorderStroke(1.dp, InputBorderColor),
+                    color = a11y.adaptiveCardSurface,
+                    border = BorderStroke(1.dp, a11y.adaptiveBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -221,13 +224,13 @@ fun SaludApoyoScreenContent(
                             text = "Sin contacto de apoyo registrado",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = a11y.adaptiveTextPrimary
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "Agrega a un familiar, cuidador o médico de confianza para llamarle rápidamente ante dosis críticas.",
                             fontSize = 13.sp,
-                            color = TextSecondary,
+                            color = a11y.adaptiveTextSecondary,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(Modifier.height(16.dp))
@@ -247,8 +250,8 @@ fun SaludApoyoScreenContent(
             items(state.contactosApoyo, key = { it.idContacto }) { contacto ->
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = CardBackground,
-                    border = BorderStroke(1.dp, InputBorderColor),
+                    color = a11y.adaptiveCardSurface,
+                    border = BorderStroke(1.dp, a11y.adaptiveBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -284,7 +287,7 @@ fun SaludApoyoScreenContent(
                                     text = contacto.nombreCompleto,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = a11y.adaptiveTextPrimary
                                 )
                                 if (contacto.esPrincipal) {
                                     Surface(
@@ -305,13 +308,13 @@ fun SaludApoyoScreenContent(
                                 Text(
                                     text = "${contacto.parentesco} • ${contacto.telefono}",
                                     fontSize = 13.sp,
-                                    color = TextSecondary
+                                    color = a11y.adaptiveTextSecondary
                                 )
                                 if (!contacto.correo.isNullOrBlank()) {
                                     Text(
                                         text = contacto.correo,
                                         fontSize = 12.sp,
-                                        color = TextMuted
+                                        color = a11y.adaptiveTextSecondary
                                     )
                                 }
                             }
@@ -382,7 +385,7 @@ fun SaludApoyoScreenContent(
                         text = "Mis Alergias",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
+                        color = a11y.adaptiveTextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -399,8 +402,8 @@ fun SaludApoyoScreenContent(
             item {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = CardBackground,
-                    border = BorderStroke(1.dp, InputBorderColor),
+                    color = a11y.adaptiveCardSurface,
+                    border = BorderStroke(1.dp, a11y.adaptiveBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -426,13 +429,13 @@ fun SaludApoyoScreenContent(
                             text = "No tienes alergias registradas",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = a11y.adaptiveTextPrimary
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "Si eres alérgico a la Penicilina, AINEs (Ibuprofeno/Aspirina), Sulfas u otros fármacos, regístralas para activar las alertas de contraindicación.",
                             fontSize = 13.sp,
-                            color = TextSecondary,
+                            color = a11y.adaptiveTextSecondary,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(Modifier.height(16.dp))
@@ -463,8 +466,8 @@ fun SaludApoyoScreenContent(
 
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = CardBackground,
-                    border = BorderStroke(1.dp, InputBorderColor),
+                    color = a11y.adaptiveCardSurface,
+                    border = BorderStroke(1.dp, a11y.adaptiveBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -492,7 +495,7 @@ fun SaludApoyoScreenContent(
                                     text = alergia.sustancia,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = a11y.adaptiveTextPrimary
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Surface(
@@ -513,7 +516,7 @@ fun SaludApoyoScreenContent(
                                 Text(
                                     text = "Reacción: ${alergia.reaccion}",
                                     fontSize = 12.5.sp,
-                                    color = TextSecondary
+                                    color = a11y.adaptiveTextSecondary
                                 )
                             }
                         }

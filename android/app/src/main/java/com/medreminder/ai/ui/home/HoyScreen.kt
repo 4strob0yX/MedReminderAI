@@ -264,6 +264,7 @@ fun HomeRoute(
             onTogglePermitePosponer = viewModel::onTogglePermitePosponer,
             onToggleEsCritico = viewModel::onToggleEsCritico,
             onContraindicacionesChange = viewModel::onContraindicacionesChange,
+            onSolicitarSugerenciasIa = viewModel::onSolicitarSugerenciasIa,
             onDismissRiesgoModal = viewModel::onDismissConfirmacionRiesgoModal,
             onGuardar = { viewModel.onGuardarMedicamento(forzarConRiesgo = false) },
             onConfirmarGuardarConRiesgo = { viewModel.onGuardarMedicamento(forzarConRiesgo = true) }
@@ -483,7 +484,8 @@ fun HomeRoute(
                 HomeTab.MI_BOTIQUIN -> "Botiquín"
                 HomeTab.SALUD_APOYO -> "Apoyo"
                 HomeTab.ANALISIS_DFS -> "Progreso"
-            }
+            },
+            onAskAi = viewModel::consultarMediAi
         )
 
         // Modal de Confirmación de Toma con Verificación Visual y Anti-Toque Falso

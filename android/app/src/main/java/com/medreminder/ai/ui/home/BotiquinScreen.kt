@@ -61,6 +61,7 @@ import com.medreminder.ai.ui.theme.AlertRedBg
 import com.medreminder.ai.ui.theme.AlertRedText
 import com.medreminder.ai.ui.theme.CardBackground
 import com.medreminder.ai.ui.theme.InputBorderColor
+import com.medreminder.ai.ui.theme.LocalAccessibilitySettings
 import com.medreminder.ai.ui.theme.ProgressBrown
 import com.medreminder.ai.ui.theme.SoftWarmSurface
 import com.medreminder.ai.ui.theme.TealBadgeBg
@@ -81,6 +82,7 @@ fun BotiquinScreenContent(
     onRecargarStock: (Int, Int) -> Unit = { _, _ -> },
     onEliminarMedicamento: (Int) -> Unit = {}
 ) {
+    val a11y = LocalAccessibilitySettings.current
     val totalMeds = state.botiquinItems.size
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -101,7 +103,7 @@ fun BotiquinScreenContent(
                             text = "Mi Botiquín",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary,
+                            color = a11y.adaptiveTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -166,7 +168,7 @@ fun BotiquinScreenContent(
                     Text(
                         text = "$totalMeds medicamentos en seguimiento activo",
                         fontSize = 15.sp,
-                        color = TextSecondary
+                        color = a11y.adaptiveTextSecondary
                     )
                 }
             }
@@ -175,7 +177,8 @@ fun BotiquinScreenContent(
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
-                    color = SoftWarmSurface,
+                    color = a11y.adaptiveSoftSurface,
+                    border = BorderStroke(1.dp, a11y.adaptiveBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -195,13 +198,13 @@ fun BotiquinScreenContent(
                                 text = "${state.porcentajeGlobalSuministros}% de suministros asegurados",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = TextPrimary
+                                color = a11y.adaptiveTextPrimary
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 text = "Próxima reposición estimada en ${state.diasReposicionEstimada} días",
                                 fontSize = 13.sp,
-                                color = TextSecondary
+                                color = a11y.adaptiveTextSecondary
                             )
                         }
                         Spacer(Modifier.width(12.dp))
@@ -217,8 +220,8 @@ fun BotiquinScreenContent(
                 item {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = CardBackground,
-                        border = BorderStroke(1.dp, InputBorderColor),
+                        color = a11y.adaptiveCardSurface,
+                        border = BorderStroke(1.dp, a11y.adaptiveBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -229,13 +232,13 @@ fun BotiquinScreenContent(
                                 text = "Tu botiquín está vacío",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = a11y.adaptiveTextPrimary
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 text = "Agrega tu primer medicamento para monitorear tus existencias y programar recordatorios.",
                                 fontSize = 14.sp,
-                                color = TextSecondary,
+                                color = a11y.adaptiveTextSecondary,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(Modifier.height(16.dp))
@@ -311,9 +314,10 @@ private fun BotiquinMedCard(
     onRecargarStock: () -> Unit = {},
     onEliminarMedicamento: () -> Unit = {}
 ) {
+    val a11y = LocalAccessibilitySettings.current
     val isBajo = item.nivel == StockNivel.BAJO
-    val badgeBg = if (isBajo) AlertRedBg else SoftWarmSurface
-    val badgeTextCol = if (isBajo) AlertRedText else TextPrimary
+    val badgeBg = if (isBajo) AlertRedBg else a11y.adaptiveSoftSurface
+    val badgeTextCol = if (isBajo) AlertRedText else a11y.adaptiveTextPrimary
     val progressColor = if (isBajo) ProgressBrown else TealPrimary
     val quedanColor = if (isBajo) ProgressBrown else TealPrimary
 
@@ -327,8 +331,8 @@ private fun BotiquinMedCard(
 
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = CardBackground,
-        border = BorderStroke(1.dp, InputBorderColor),
+        color = a11y.adaptiveCardSurface,
+        border = BorderStroke(1.dp, a11y.adaptiveBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -356,13 +360,13 @@ private fun BotiquinMedCard(
                         text = item.nombre,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
+                        color = a11y.adaptiveTextPrimary
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
                         text = item.subtituloDosis,
                         fontSize = 14.sp,
-                        color = TextSecondary,
+                        color = a11y.adaptiveTextSecondary,
                         lineHeight = 19.sp
                     )
                 }

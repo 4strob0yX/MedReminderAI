@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,6 +115,7 @@ fun NuevoMedicamentoScreen(
     onTogglePermitePosponer: (Boolean) -> Unit,
     onToggleEsCritico: (Boolean) -> Unit,
     onContraindicacionesChange: (String) -> Unit,
+    onSolicitarSugerenciasIa: () -> Unit = {},
     onDismissRiesgoModal: () -> Unit = {},
     onGuardar: () -> Unit,
     onConfirmarGuardarConRiesgo: () -> Unit = onGuardar
@@ -215,7 +217,8 @@ fun NuevoMedicamentoScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .imePadding(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -477,17 +480,35 @@ fun NuevoMedicamentoScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = TealSoftBg
+                                shape = RoundedCornerShape(10.dp),
+                                color = TealSoftBg,
+                                border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.35f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(enabled = !form.isBuscandoCatalogo && !form.isSubmitting) {
+                                        onSolicitarSugerenciasIa()
+                                    }
                             ) {
-                                Text(
-                                    text = "Sugerencias IA",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TealPrimary,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    if (form.isBuscandoCatalogo) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            color = TealPrimary,
+                                            strokeWidth = 1.8.dp
+                                        )
+                                    }
+                                    Text(
+                                        text = if (form.isBuscandoCatalogo) "Analizando IA..." else "✨ Sugerencias IA",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = TealDark,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                         Spacer(Modifier.height(12.dp))

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import AliasChoices, BaseModel, EmailStr, Field, field_validator
+from pydantic import AliasChoices, BaseModel, EmailStr, Field, computed_field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -68,5 +68,15 @@ class UsuarioOut(BaseModel):
     nombre_completo: str
     correo: EmailStr
     fecha_registro: datetime
+
+    @computed_field
+    @property
+    def nombre(self) -> str:
+        return self.nombre_completo.split(" ")[0] if self.nombre_completo else "Paciente"
+
+    @computed_field
+    @property
+    def email(self) -> str:
+        return str(self.correo)
 
     model_config = {"from_attributes": True}

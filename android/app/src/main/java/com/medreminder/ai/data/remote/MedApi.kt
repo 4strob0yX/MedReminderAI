@@ -91,5 +91,12 @@ interface MedApi {
 
     @DELETE("contactos-apoyo/{id}")
     suspend fun eliminarContacto(@Path("id") idContacto: Int): Response<Unit>
+
+    // --- Motor IA Clínico Ollama (medi-clinico) ---
+    @POST("ai/chat")
+    suspend fun consultarMediAi(@Body body: AiChatRequestDto): AiChatResponseDto
+
+    @POST("ai/sugerir-medicamento")
+    suspend fun sugerirMedicamentoAi(@Body body: AiMedicationSuggestRequestDto): AiMedicationSuggestResponseDto
 }
 

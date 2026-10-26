@@ -66,13 +66,13 @@ class NetworkModule(private val tokenStore: TokenStore) {
         }
 
         fun getAllCandidates(): List<String> {
-            return (listOf("172.20.10.2") + detectSubnetCandidates() + BASE_CANDIDATES).distinct()
+            return (listOf("127.0.0.1", "172.20.10.2", "10.0.2.2") + detectSubnetCandidates() + BASE_CANDIDATES).distinct()
         }
     }
 
     init {
         if (activeHost == null) {
-            activeHost = tokenStore.lastWorkingHost ?: "172.20.10.2"
+            activeHost = tokenStore.lastWorkingHost ?: "127.0.0.1"
         }
     }
 
@@ -192,7 +192,7 @@ class NetworkModule(private val tokenStore: TokenStore) {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(28, TimeUnit.SECONDS)
         .addInterceptor(dynamicHostInterceptor)
         .addInterceptor(authInterceptor)
         .authenticator(tokenAuthenticator)

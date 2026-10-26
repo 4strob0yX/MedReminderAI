@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api.routers import (
+    ai,
     alergias,
     auth,
     contactos,
@@ -68,3 +69,4 @@ app.include_router(tratamientos.router)
 app.include_router(recordatorios.router)
 app.include_router(alergias.router)
 app.include_router(contactos.router)
+app.include_router(ai.router)

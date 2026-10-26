@@ -1,6 +1,7 @@
 package com.medreminder.ai.ui.components
 
 import android.content.Context
+import com.medreminder.ai.data.remote.AiChatResponseDto
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInOutSine
@@ -829,10 +830,10 @@ private fun DrawScope.drawSparkle(center: Offset, r: Float, color: Color, alpha:
     if (r <= 0.5f) return
     val p = Path().apply {
         moveTo(center.x, center.y - r)
-        quadraticBezierTo(center.x, center.y, center.x + r, center.y)
-        quadraticBezierTo(center.x, center.y, center.x, center.y + r)
-        quadraticBezierTo(center.x, center.y, center.x - r, center.y)
-        quadraticBezierTo(center.x, center.y, center.x, center.y - r)
+        quadraticTo(center.x, center.y, center.x + r, center.y)
+        quadraticTo(center.x, center.y, center.x, center.y + r)
+        quadraticTo(center.x, center.y, center.x - r, center.y)
+        quadraticTo(center.x, center.y, center.x, center.y - r)
         close()
     }
     drawPath(p, color = color.copy(alpha = alpha.coerceIn(0f, 1f)))
@@ -873,7 +874,8 @@ fun DraggableMediCompanion(
     onDismissChat: () -> Unit = {},
     reaction: MediReaction? = null,
     nombreUsuario: String = "Paciente",
-    contextoPantalla: String = "Hoy"
+    contextoPantalla: String = "Hoy",
+    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
@@ -1230,7 +1232,8 @@ fun DraggableMediCompanion(
                 nombreUsuario = nombreUsuario,
                 contextoPantalla = contextoPantalla,
                 onDismiss = dismissChat,
-                onMoodChange = { currentMood = it }
+                onMoodChange = { currentMood = it },
+                onAskAi = onAskAi
             )
         }
 
@@ -1758,7 +1761,8 @@ fun MediDirectEmergentChatCard(
     nombreUsuario: String = "Paciente",
     contextoPantalla: String = "Hoy",
     onDismiss: () -> Unit,
-    onMoodChange: (MediMood) -> Unit = {}
+    onMoodChange: (MediMood) -> Unit = {},
+    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null
 ) {
     val context = LocalContext.current
     val a11y = LocalAccessibilitySettings.current
@@ -1773,34 +1777,60 @@ fun MediDirectEmergentChatCard(
     val soundLevel by VoiceInputHelper.soundLevel.collectAsState()
     val sttError by VoiceInputHelper.lastError.collectAsState()
 
-    val initialGreeting = "¡Hola, $nombreUsuario! ¿En qué puedo apoyarte hoy? Puedes consultarme sobre tus medicamentos, tomas olvidadas o cuidados de salud."
+    val initialGreeting = "¡Hola, $nombreUsuario! Soy Medi, impulsado por el motor clínico Ollama (medi-clinico). ¿En qué puedo apoyarte hoy sobre tus medicamentos, tomas o alergias?"
     var displayedText by remember { mutableStateOf(initialGreeting) }
     var activeGoldenRule by remember { mutableStateOf("") }
-    var activeCategory by remember { mutableStateOf("CONSEJO CLÍNICO") }
+    var activeCategory by remember { mutableStateOf("MOTOR OLLAMA · MEDI-CLINICO") }
 
     val askQuestion: (String) -> Unit = { query ->
         VoiceInputHelper.stopListening()
-        val dossier = buildClinicalDossier(query, nombreUsuario)
-        activeGoldenRule = dossier.goldenRule
-        activeCategory = dossier.category
         onMoodChange(MediMood.TALKING)
-        isSpeaking = true
 
         coroutineScope.launch {
             isGenerating = true
+            displayedText = "Consultando motor clínico Ollama (medi-clinico)..."
+
+            val remoteAi = runCatching { onAskAi?.invoke(query, contextoPantalla) }.getOrNull()
+            val fullText: String
+            val voiceScript: String
+
+            if (remoteAi != null) {
+                activeGoldenRule = remoteAi.goldenRule
+                activeCategory = if (remoteAi.usingOllama) {
+                    "OLLAMA · ${remoteAi.category.uppercase()}"
+                } else {
+                    remoteAi.category.uppercase()
+                }
+                val pts = remoteAi.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
+                fullText = buildString {
+                    append(remoteAi.keyInsight)
+                    if (pts.isNotBlank()) {
+                        append("\n\n")
+                        append(pts)
+                    }
+                }
+                voiceScript = remoteAi.fullVoiceScript.ifBlank { remoteAi.keyInsight }
+            } else {
+                val dossier = buildClinicalDossier(query, nombreUsuario)
+                activeGoldenRule = dossier.goldenRule
+                activeCategory = dossier.category
+                fullText = "${dossier.keyInsight}\n\n" +
+                    dossier.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
+                voiceScript = dossier.fullVoiceScript
+            }
+
             displayedText = ""
-            val fullText = "${dossier.keyInsight}\n\n${dossier.goldenRule}\n\n" +
-                dossier.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
+            isSpeaking = true
+            TtsHelper.speak(context, voiceScript, key = "medi_emergent_answer")
 
             val words = fullText.split(" ")
             for (i in words.indices) {
                 displayedText = words.take(i + 1).joinToString(" ")
-                delay(30)
+                delay(22)
             }
             isGenerating = false
 
-            TtsHelper.speak(context, dossier.fullVoiceScript, key = "medi_emergent_answer")
-            delay(5500)
+            delay(4800)
             isSpeaking = false
             onMoodChange(MediMood.NORMAL)
         }

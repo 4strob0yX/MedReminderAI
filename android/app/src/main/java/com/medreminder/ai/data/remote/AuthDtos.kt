@@ -30,8 +30,8 @@ data class ResetPasswordResponse(
 
 data class UsuarioDto(
     @SerializedName("id_usuario") val idUsuario: Int,
-    val nombre: String,
-    val email: String
+    @SerializedName(value = "nombre_completo", alternate = ["nombre"]) val nombre: String? = null,
+    @SerializedName(value = "correo", alternate = ["email"]) val email: String? = null
 )
 
 data class TokenResponse(

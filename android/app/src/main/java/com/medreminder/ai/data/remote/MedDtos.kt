@@ -125,3 +125,50 @@ data class VerificarAlergiasOutDto(
     @SerializedName("severidad") val severidad: String?
 )
 
+
+// --- Motor de Inteligencia Artificial Clínica (Ollama medi-clinico) ---
+
+data class AiChatRequestDto(
+    val query: String,
+    @SerializedName("nombre_usuario") val nombreUsuario: String? = "Paciente",
+    @SerializedName("contexto_pantalla") val contextoPantalla: String? = "Hoy"
+)
+
+data class AiDossierPointDto(
+    val label: String,
+    val description: String,
+    @SerializedName("icon_type") val iconType: String = "info"
+)
+
+data class AiChatResponseDto(
+    val title: String,
+    val category: String,
+    @SerializedName("risk_level") val riskLevel: String,
+    @SerializedName("risk_score") val riskScore: Float = 0.25f,
+    @SerializedName("key_insight") val keyInsight: String,
+    val points: List<AiDossierPointDto> = emptyList(),
+    @SerializedName("golden_rule") val goldenRule: String,
+    @SerializedName("full_voice_script") val fullVoiceScript: String,
+    @SerializedName("model_used") val modelUsed: String = "medi-clinico",
+    @SerializedName("using_ollama") val usingOllama: Boolean = true
+)
+
+data class AiMedicationSuggestRequestDto(
+    val nombre: String
+)
+
+data class AiMedicationSuggestResponseDto(
+    val nombre: String,
+    @SerializedName("principio_activo") val principioActivo: String,
+    val familia: String,
+    @SerializedName("dosis_sugerida") val dosisSugerida: String,
+    @SerializedName("frecuencia_horas_sugerida") val frecuenciaHorasSugerida: Int = 8,
+    @SerializedName("forma_farmaceutica") val formaFarmaceutica: String = "comprimidos",
+    @SerializedName("color_sugerido") val colorSugerido: String = "blanco",
+    @SerializedName("instrucciones_toma") val instruccionesToma: String = "Con abundante agua",
+    val contraindicaciones: String,
+    @SerializedName("es_critico_defecto") val esCriticoDefecto: Boolean = false,
+    @SerializedName("alerta_alergia") val alertaAlergia: String? = null,
+    @SerializedName("alerta_interaccion") val alertaInteraccion: String? = null,
+    @SerializedName("model_used") val modelUsed: String = "medi-clinico"
+)

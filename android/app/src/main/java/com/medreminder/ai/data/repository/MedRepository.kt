@@ -1,5 +1,9 @@
 package com.medreminder.ai.data.repository
 
+import com.medreminder.ai.data.remote.AiChatRequestDto
+import com.medreminder.ai.data.remote.AiChatResponseDto
+import com.medreminder.ai.data.remote.AiMedicationSuggestRequestDto
+import com.medreminder.ai.data.remote.AiMedicationSuggestResponseDto
 import com.medreminder.ai.data.remote.AlergiaCreateDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoCreateDto
@@ -251,6 +255,31 @@ class MedRepository(private val api: MedApi) {
         if (!res.isSuccessful && res.code() != 204) {
             throw Exception("No se pudo eliminar el contacto")
         }
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    // --- Motor IA Clínico Ollama (medi-clinico) ---
+    suspend fun consultarMediAi(
+        query: String,
+        nombreUsuario: String? = "Paciente",
+        contextoPantalla: String? = "Hoy"
+    ): Result<AiChatResponseDto> = runCatching {
+        api.consultarMediAi(
+            AiChatRequestDto(
+                query = query.trim(),
+                nombreUsuario = nombreUsuario,
+                contextoPantalla = contextoPantalla
+            )
+        )
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun sugerirMedicamentoAi(nombre: String): Result<AiMedicationSuggestResponseDto> = runCatching {
+        api.sugerirMedicamentoAi(AiMedicationSuggestRequestDto(nombre = nombre.trim()))
     }.recoverCatching {
         if (it is CancellationException) throw it
         throw Exception(mapError(it))
