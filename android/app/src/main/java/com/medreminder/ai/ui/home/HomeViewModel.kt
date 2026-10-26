@@ -132,10 +132,33 @@ enum class MediReactionKind { TAKEN, SNOOZED, SKIPPED }
 
 data class MediReaction(val kind: MediReactionKind, val seq: Int)
 
+data class EditablePrescriptionItem(
+    val seleccionado: Boolean = true,
+    val nombre: String,
+    val principioActivo: String = "",
+    val dosis: String,
+    val frecuenciaHoras: Int = 8,
+    val duracionDias: Int = 7,
+    val instrucciones: String = "Tomar con abundante agua",
+    val formaFarmaceutica: String = "comprimidos",
+    val colorPastilla: String = "blanco",
+    val esCritico: Boolean = false,
+    val confidence: String = "high",
+    val alertaAlergia: String? = null,
+    val alertaInteraccion: String? = null
+)
+
 data class HomeUiState(
     val mediReaction: MediReaction? = null,
     val selectedTab: HomeTab = HomeTab.HOY,
     val showNuevoMedicamento: Boolean = false,
+    val showEscaneoReceta: Boolean = false,
+    val analizandoRecetaIa: Boolean = false,
+    val guardandoRecetaMasiva: Boolean = false,
+    val medicoRecetaDetectado: String = "Médico Tratante",
+    val resumenRecetaIa: String? = null,
+    val modeloRecetaUsado: String = "medi-clinico",
+    val itemsRecetaEditables: List<EditablePrescriptionItem> = emptyList(),
     val selectedTomaForModal: TomaHoyItemUi? = null,
     val nombreUsuario: String = "Paciente",
     val fechaEncabezado: String = "",
@@ -925,6 +948,152 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     _state.update { it.copy(snackbarMessage = err.message ?: "No se pudo eliminar") }
                 }
             )
+        }
+    }
+
+    // --- Escaneo y Confirmación de Receta Médica con Ollama (`medi-clinico`) ---
+
+    fun onOpenEscaneoReceta() {
+        _state.update {
+            it.copy(
+                showEscaneoReceta = true,
+                analizandoRecetaIa = false,
+                guardandoRecetaMasiva = false
+            )
+        }
+    }
+
+    fun onCloseEscaneoReceta() {
+        _state.update {
+            it.copy(
+                showEscaneoReceta = false,
+                analizandoRecetaIa = false,
+                guardandoRecetaMasiva = false
+            )
+        }
+    }
+
+    fun onAnalizarRecetaIa(textoReceta: String?, imageBase64: String? = null) {
+        if (textoReceta.isNullOrBlank() && imageBase64.isNullOrBlank()) {
+            _state.update { it.copy(snackbarMessage = "Ingresa o selecciona una receta médica para analizar") }
+            return
+        }
+        _state.update {
+            it.copy(
+                analizandoRecetaIa = true,
+                snackbarMessage = "Analizando receta médica con motor Ollama (medi-clinico)..."
+            )
+        }
+        viewModelScope.launch {
+            val res = repository.analizarRecetaAi(
+                textoReceta = textoReceta,
+                imageBase64 = imageBase64
+            )
+            res.fold(
+                onSuccess = { scan ->
+                    val editables = scan.medicamentos.map { item ->
+                        EditablePrescriptionItem(
+                            // Si tiene conflicto de alergia cruzada (Regla 1), lo desmarcamos preventivamente
+                            seleccionado = item.alertaAlergia.isNullOrBlank(),
+                            nombre = item.name,
+                            principioActivo = item.principioActivo,
+                            dosis = item.dosage,
+                            frecuenciaHoras = item.frequencyHours,
+                            duracionDias = item.durationDays,
+                            instrucciones = item.instructions,
+                            formaFarmaceutica = item.formaFarmaceutica,
+                            colorPastilla = item.colorSugerido,
+                            esCritico = item.esCritico,
+                            confidence = item.confidence,
+                            alertaAlergia = item.alertaAlergia,
+                            alertaInteraccion = item.alertaInteraccion
+                        )
+                    }
+                    _state.update {
+                        it.copy(
+                            analizandoRecetaIa = false,
+                            medicoRecetaDetectado = scan.medico,
+                            resumenRecetaIa = scan.resumenClinico,
+                            modeloRecetaUsado = scan.modelUsed,
+                            itemsRecetaEditables = editables,
+                            snackbarMessage = "Receta analizada por ${scan.modelUsed}"
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            analizandoRecetaIa = false,
+                            snackbarMessage = err.message ?: "No se pudo analizar la receta médica"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onActualizarItemReceta(index: Int, updated: EditablePrescriptionItem) {
+        _state.update { prev ->
+            if (index !in prev.itemsRecetaEditables.indices) return@update prev
+            val nuevaLista = prev.itemsRecetaEditables.toMutableList()
+            nuevaLista[index] = updated
+            prev.copy(itemsRecetaEditables = nuevaLista)
+        }
+    }
+
+    fun onConfirmarYGuardarReceta() {
+        val seleccionados = _state.value.itemsRecetaEditables.filter { it.seleccionado && it.nombre.isNotBlank() }
+        if (seleccionados.isEmpty()) {
+            _state.update { it.copy(snackbarMessage = "Selecciona al menos un medicamento de la receta para guardar") }
+            return
+        }
+        _state.update { it.copy(guardandoRecetaMasiva = true) }
+        viewModelScope.launch {
+            val zoneLocal = ZoneId.systemDefault()
+            val ahora = LocalDateTime.now(zoneLocal)
+            val inicioUtc = ahora.atZone(zoneLocal).withZoneSameInstant(ZoneOffset.UTC)
+                .toLocalDateTime().withNano(0).toString()
+
+            var guardados = 0
+            for (med in seleccionados) {
+                val tomasPorDia = (24 / med.frecuenciaHoras.coerceAtLeast(1)).coerceAtLeast(1)
+                val stockCalculado = (tomasPorDia * med.duracionDias.coerceAtLeast(1)).coerceIn(10, 120)
+                val finUtc = ahora.plusDays(med.duracionDias.toLong().coerceAtLeast(1L))
+                    .atZone(zoneLocal).withZoneSameInstant(ZoneOffset.UTC)
+                    .toLocalDateTime().withNano(0).toString()
+
+                val res = repository.registrarMedicamentoConTratamiento(
+                    nombre = med.nombre,
+                    principioActivo = med.principioActivo.ifBlank { null },
+                    dosis = med.dosis.ifBlank { "1 comprimido" },
+                    frecuenciaHoras = med.frecuenciaHoras,
+                    cantidadStock = stockCalculado,
+                    permitePosponer = !med.esCritico,
+                    esCritico = med.esCritico,
+                    contraindicaciones = null,
+                    formaFarmaceutica = med.formaFarmaceutica,
+                    colorPastilla = med.colorPastilla,
+                    instruccionesToma = med.instrucciones,
+                    proposito = "Receta médica (${_state.value.medicoRecetaDetectado})",
+                    fechaInicio = inicioUtc,
+                    fechaFin = finUtc
+                )
+                if (res.isSuccess) {
+                    guardados++
+                }
+            }
+
+            _state.update {
+                it.copy(
+                    guardandoRecetaMasiva = false,
+                    showEscaneoReceta = false,
+                    showNuevoMedicamento = false,
+                    itemsRecetaEditables = emptyList(),
+                    resumenRecetaIa = null,
+                    snackbarMessage = "Se registraron $guardados medicamento(s) de tu receta en Mi Botiquín"
+                )
+            }
+            cargarDatos(silencioso = false)
         }
     }
 

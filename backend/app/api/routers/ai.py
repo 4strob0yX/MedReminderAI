@@ -11,9 +11,12 @@ from app.schemas.ai import (
     AiChatResponse,
     AiMedicationSuggestRequest,
     AiMedicationSuggestResponse,
+    AiPrescriptionScanRequest,
+    AiPrescriptionScanResponse,
     AiStatusResponse,
 )
 from app.services.ollama_service import (
+    analizar_receta_ollama,
     consultar_medi_ollama,
     obtener_estado_ollama,
     sugerir_medicamento_ia,
@@ -66,6 +69,22 @@ def autocompletar_medicamento_ia(
     """Autocompleta datos farmacológicos, dosis, horario e interacciones de un medicamento usando IA + Catálogo."""
     return sugerir_medicamento_ia(
         nombre=body.nombre,
+        db=db,
+        user=current,
+    )
+
+
+@router.post("/analizar-receta", response_model=AiPrescriptionScanResponse)
+def escanear_receta_medica_ia(
+    body: AiPrescriptionScanRequest,
+    db: Session = Depends(get_db),
+    current: Usuario | None = Depends(get_optional_user),
+):
+    """Analiza el texto OCR o imagen de una receta médica con nuestro modelo `medi-clinico` en Ollama
+    y valida automáticamente alergias cruzadas e interacciones del paciente."""
+    return analizar_receta_ollama(
+        texto_receta=body.texto_receta,
+        image_base64=body.image_base64,
         db=db,
         user=current,
     )

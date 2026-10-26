@@ -229,11 +229,15 @@ fun HomeRoute(
         }
     }
 
-    BackHandler(enabled = state.showNuevoMedicamento) {
-        viewModel.onCerrarNuevoMedicamento()
+    BackHandler(enabled = state.showEscaneoReceta) {
+        viewModel.onCloseEscaneoReceta()
     }
 
-    BackHandler(enabled = !state.showNuevoMedicamento && state.selectedTab != HomeTab.HOY) {
+    BackHandler(enabled = !state.showEscaneoReceta && state.showNuevoMedicamento) {
+        viewModel.onCloseNuevoMedicamento()
+    }
+
+    BackHandler(enabled = !state.showEscaneoReceta && !state.showNuevoMedicamento && state.selectedTab != HomeTab.HOY) {
         viewModel.onSelectTab(HomeTab.HOY)
     }
 
@@ -242,6 +246,17 @@ fun HomeRoute(
             snackbarHostState.showSnackbar(msg)
             viewModel.onSnackbarShown()
         }
+    }
+
+    if (state.showEscaneoReceta) {
+        ConfirmarRecetaScreen(
+            state = state,
+            onBack = viewModel::onCloseEscaneoReceta,
+            onAnalizarReceta = viewModel::onAnalizarRecetaIa,
+            onActualizarItem = viewModel::onActualizarItemReceta,
+            onConfirmarGuardar = viewModel::onConfirmarYGuardarReceta
+        )
+        return
     }
 
     if (state.showNuevoMedicamento) {
@@ -265,6 +280,7 @@ fun HomeRoute(
             onToggleEsCritico = viewModel::onToggleEsCritico,
             onContraindicacionesChange = viewModel::onContraindicacionesChange,
             onSolicitarSugerenciasIa = viewModel::onSolicitarSugerenciasIa,
+            onEscanearRecetaCompletaIa = viewModel::onOpenEscaneoReceta,
             onDismissRiesgoModal = viewModel::onDismissConfirmacionRiesgoModal,
             onGuardar = { viewModel.onGuardarMedicamento(forzarConRiesgo = false) },
             onConfirmarGuardarConRiesgo = { viewModel.onGuardarMedicamento(forzarConRiesgo = true) }
@@ -389,6 +405,7 @@ fun HomeRoute(
                     HomeTab.MI_BOTIQUIN -> BotiquinScreenContent(
                         state = state,
                         onAddMedicamentoClick = viewModel::onOpenNuevoMedicamento,
+                        onEscanearRecetaClick = viewModel::onOpenEscaneoReceta,
                         onRecargarStock = viewModel::onRecargarStock,
                         onEliminarMedicamento = viewModel::onEliminarMedicamento
                     )

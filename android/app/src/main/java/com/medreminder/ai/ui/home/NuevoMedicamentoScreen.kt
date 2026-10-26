@@ -116,6 +116,7 @@ fun NuevoMedicamentoScreen(
     onToggleEsCritico: (Boolean) -> Unit,
     onContraindicacionesChange: (String) -> Unit,
     onSolicitarSugerenciasIa: () -> Unit = {},
+    onEscanearRecetaCompletaIa: () -> Unit = {},
     onDismissRiesgoModal: () -> Unit = {},
     onGuardar: () -> Unit,
     onConfirmarGuardarConRiesgo: () -> Unit = onGuardar
@@ -162,6 +163,22 @@ fun NuevoMedicamentoScreen(
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = TextPrimary
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = TealBadgeBg,
+                        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.45f)),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onEscanearRecetaCompletaIa() }
+                    ) {
+                        Text(
+                            text = "📷 Receta IA",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TealPrimary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                         )
                     }
                 }

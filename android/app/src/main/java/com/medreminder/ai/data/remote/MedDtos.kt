@@ -172,3 +172,31 @@ data class AiMedicationSuggestResponseDto(
     @SerializedName("alerta_interaccion") val alertaInteraccion: String? = null,
     @SerializedName("model_used") val modelUsed: String = "medi-clinico"
 )
+
+data class AiPrescriptionScanRequestDto(
+    @SerializedName("texto_receta") val textoReceta: String? = null,
+    @SerializedName("image_base64") val imageBase64: String? = null
+)
+
+data class AiPrescriptionMedItemDto(
+    val name: String,
+    @SerializedName("principio_activo") val principioActivo: String = "",
+    val dosage: String,
+    @SerializedName("frequency_hours") val frequencyHours: Int = 8,
+    @SerializedName("duration_days") val durationDays: Int = 7,
+    val instructions: String = "Tomar con abundante agua",
+    @SerializedName("forma_farmaceutica") val formaFarmaceutica: String = "comprimidos",
+    @SerializedName("color_sugerido") val colorSugerido: String = "blanco",
+    @SerializedName("es_critico") val esCritico: Boolean = false,
+    val confidence: String = "high",
+    @SerializedName("alerta_alergia") val alertaAlergia: String? = null,
+    @SerializedName("alerta_interaccion") val alertaInteraccion: String? = null
+)
+
+data class AiPrescriptionScanResponseDto(
+    val medico: String = "Médico Tratante",
+    @SerializedName("resumen_clinico") val resumenClinico: String,
+    val medicamentos: List<AiPrescriptionMedItemDto> = emptyList(),
+    @SerializedName("model_used") val modelUsed: String = "medi-clinico",
+    @SerializedName("using_ollama") val usingOllama: Boolean = true
+)

@@ -1,5 +1,6 @@
 from app.services.ollama_service import (
     _extraer_json_seguro,
+    analizar_receta_ollama,
     consultar_medi_ollama,
     obtener_estado_ollama,
     sugerir_medicamento_ia,
@@ -38,3 +39,17 @@ def test_sugerir_medicamento_ia_catalogo():
     assert "Losartán" in res.nombre
     assert res.principio_activo == "Losartán potásico"
     assert res.dosis_sugerida == "50 mg"
+
+
+def test_analizar_receta_ollama():
+    res = analizar_receta_ollama(
+        texto_receta=(
+            "Dr. Roberto Gómez\n"
+            "1) Amoxicilina 500 mg cápsulas: tomar 1 cada 8 horas por 7 días.\n"
+            "2) Paracetamol 500 mg tabletas: tomar 1 cada 8 horas por 5 días."
+        ),
+        db=None,
+        user=None,
+    )
+    assert len(res.medicamentos) >= 2
+    assert any("Amoxicilina" in m.name for m in res.medicamentos)

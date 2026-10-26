@@ -79,6 +79,7 @@ import com.medreminder.ai.ui.theme.TextSecondary
 fun BotiquinScreenContent(
     state: HomeUiState,
     onAddMedicamentoClick: () -> Unit,
+    onEscanearRecetaClick: () -> Unit = {},
     onRecargarStock: (Int, Int) -> Unit = { _, _ -> },
     onEliminarMedicamento: (Int) -> Unit = {}
 ) {
@@ -91,7 +92,7 @@ fun BotiquinScreenContent(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Cabecera "Mi Botiquín" + badge "• Al día"
+            // Cabecera "Mi Botiquín" + botones "Receta IA" y "+ Agregar"
             item {
                 Column {
                     Row(
@@ -112,6 +113,27 @@ fun BotiquinScreenContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = TealBadgeBg,
+                                border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { onEscanearRecetaClick() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "📷 Receta IA",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TealPrimary
+                                    )
+                                }
+                            }
+
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = TealPrimary,
@@ -135,30 +157,6 @@ fun BotiquinScreenContent(
                                         fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = TealBadgeBg
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(TealPrimary)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = "Al día",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TealBadgeText
                                     )
                                 }
                             }

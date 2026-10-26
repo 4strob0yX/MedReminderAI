@@ -52,3 +52,31 @@ class AiStatusResponse(BaseModel):
     active_model: str
     available_models: list[str]
     formal_rules_loaded: int = 6
+
+
+class AiPrescriptionScanRequest(BaseModel):
+    texto_receta: str | None = Field(default=None, max_length=4000)
+    image_base64: str | None = None
+
+
+class AiPrescriptionMedItem(BaseModel):
+    name: str
+    principio_activo: str = ""
+    dosage: str
+    frequency_hours: int = 8
+    duration_days: int = 7
+    instructions: str = "Tomar con abundante agua"
+    forma_farmaceutica: str = "comprimidos"
+    color_sugerido: str = "blanco"
+    es_critico: bool = False
+    confidence: str = "high"  # "high" | "low"
+    alerta_alergia: str | None = None
+    alerta_interaccion: str | None = None
+
+
+class AiPrescriptionScanResponse(BaseModel):
+    medico: str = "Médico Tratante"
+    resumen_clinico: str
+    medicamentos: list[AiPrescriptionMedItem]
+    model_used: str = "medi-clinico"
+    using_ollama: bool = True

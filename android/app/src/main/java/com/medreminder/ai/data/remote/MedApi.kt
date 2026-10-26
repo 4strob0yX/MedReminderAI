@@ -98,5 +98,8 @@ interface MedApi {
 
     @POST("ai/sugerir-medicamento")
     suspend fun sugerirMedicamentoAi(@Body body: AiMedicationSuggestRequestDto): AiMedicationSuggestResponseDto
+
+    @POST("ai/analizar-receta")
+    suspend fun analizarRecetaAi(@Body body: AiPrescriptionScanRequestDto): AiPrescriptionScanResponseDto
 }
 

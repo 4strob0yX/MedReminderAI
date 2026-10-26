@@ -4,6 +4,8 @@ import com.medreminder.ai.data.remote.AiChatRequestDto
 import com.medreminder.ai.data.remote.AiChatResponseDto
 import com.medreminder.ai.data.remote.AiMedicationSuggestRequestDto
 import com.medreminder.ai.data.remote.AiMedicationSuggestResponseDto
+import com.medreminder.ai.data.remote.AiPrescriptionScanRequestDto
+import com.medreminder.ai.data.remote.AiPrescriptionScanResponseDto
 import com.medreminder.ai.data.remote.AlergiaCreateDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoCreateDto
@@ -280,6 +282,21 @@ class MedRepository(private val api: MedApi) {
 
     suspend fun sugerirMedicamentoAi(nombre: String): Result<AiMedicationSuggestResponseDto> = runCatching {
         api.sugerirMedicamentoAi(AiMedicationSuggestRequestDto(nombre = nombre.trim()))
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun analizarRecetaAi(
+        textoReceta: String? = null,
+        imageBase64: String? = null
+    ): Result<AiPrescriptionScanResponseDto> = runCatching {
+        api.analizarRecetaAi(
+            AiPrescriptionScanRequestDto(
+                textoReceta = textoReceta?.trim()?.ifBlank { null },
+                imageBase64 = imageBase64?.ifBlank { null }
+            )
+        )
     }.recoverCatching {
         if (it is CancellationException) throw it
         throw Exception(mapError(it))
