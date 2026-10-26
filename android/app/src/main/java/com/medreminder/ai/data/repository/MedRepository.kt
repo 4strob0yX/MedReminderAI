@@ -44,35 +44,57 @@ data class DashboardBundle(
 
 class MedRepository(private val api: MedApi) {
 
+    @Volatile
+    var cachedBundle: DashboardBundle? = null
+        private set
+
     suspend fun cargarDashboard(
         fechaUtc: String?,
         tzOffsetMinutes: Int? = null
     ): Result<DashboardBundle> = runCatching {
-        coroutineScope {
-            val medsDef = async { api.listarMedicamentos() }
-            val tratsDef = async { api.listarTratamientos() }
-            val recsDef = async { api.listarRecordatorios(fecha = fechaUtc, tzOffsetMinutes = tzOffsetMinutes) }
-            val alergiasDef = async {
-                runCatching { api.listarAlergias() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
-            }
-            val contactosDef = async {
-                runCatching { api.listarContactos() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
-            }
-            val perfilDef = async {
-                runCatching { api.obtenerPerfil() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
-            }
+        val unified = runCatching {
+            api.obtenerDashboardUnificado(fecha = fechaUtc, tzOffsetMinutes = tzOffsetMinutes)
+        }.onFailure { if (it is CancellationException) throw it }.getOrNull()
 
-            val perfil = perfilDef.await()
+        val bundle = if (unified != null) {
             DashboardBundle(
-                medicamentos = medsDef.await(),
-                tratamientos = tratsDef.await(),
-                recordatoriosHoy = recsDef.await(),
-                alergias = alergiasDef.await(),
-                contactosApoyo = contactosDef.await(),
-                nombreUsuario = perfil?.nombre,
-                perfil = perfil
+                medicamentos = unified.medicamentos,
+                tratamientos = unified.tratamientos,
+                recordatoriosHoy = unified.recordatoriosHoy,
+                alergias = unified.alergias,
+                contactosApoyo = unified.contactosApoyo,
+                nombreUsuario = unified.perfil?.nombre,
+                perfil = unified.perfil
             )
+        } else {
+            coroutineScope {
+                val medsDef = async { api.listarMedicamentos() }
+                val tratsDef = async { api.listarTratamientos() }
+                val recsDef = async { api.listarRecordatorios(fecha = fechaUtc, tzOffsetMinutes = tzOffsetMinutes) }
+                val alergiasDef = async {
+                    runCatching { api.listarAlergias() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
+                }
+                val contactosDef = async {
+                    runCatching { api.listarContactos() }.onFailure { if (it is CancellationException) throw it }.getOrDefault(emptyList())
+                }
+                val perfilDef = async {
+                    runCatching { api.obtenerPerfil() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+                }
+
+                val perfil = perfilDef.await()
+                DashboardBundle(
+                    medicamentos = medsDef.await(),
+                    tratamientos = tratsDef.await(),
+                    recordatoriosHoy = recsDef.await(),
+                    alergias = alergiasDef.await(),
+                    contactosApoyo = contactosDef.await(),
+                    nombreUsuario = perfil?.nombre,
+                    perfil = perfil
+                )
+            }
         }
+        cachedBundle = bundle
+        bundle
     }.recoverCatching {
         if (it is CancellationException) throw it
         throw Exception(mapError(it))

@@ -285,33 +285,47 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
     // --- Acciones de Toma y Reversión (Undo) ---
 
+    private fun applyOptimisticStatus(prev: HomeUiState, idRecordatorio: Int, nuevoEstado: String): HomeUiState {
+        val updatedTomas = prev.tomasHoy.map {
+            if (it.idRecordatorio == idRecordatorio) it.copy(estado = nuevoEstado) else it
+        }
+        val completadas = updatedTomas.count { it.estado == "tomado" }
+        val omitidas = updatedTomas.count { it.estado == "omitido" }
+        return prev.copy(
+            tomasHoy = updatedTomas,
+            tomasCompletadasCount = completadas,
+            vecesOmitidasHoy = omitidas
+        )
+    }
+
     fun onTomarAhora() {
         val toma = _state.value.selectedTomaForModal ?: return
         if (_state.value.isActionInFlight) return
 
-        _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
+        // Actualización optimista inmediata (0ms latencia percibida)
+        _state.update { prev ->
+            applyOptimisticStatus(prev, toma.idRecordatorio, "tomado").copy(
+                isActionInFlight = true,
+                selectedTomaForModal = null,
+                seniorPenaltyModal = null,
+                snackbarMessage = if (prev.esAdultoMayor) {
+                    "✓ Toma registrada a tiempo: ${toma.nombreMedicamento}"
+                } else {
+                    "+25 XP • Toma registrada: ${toma.nombreMedicamento}"
+                },
+                mediReaction = nextReaction(prev, MediReactionKind.TAKEN)
+            )
+        }
         viewModelScope.launch {
             val res = repository.tomarRecordatorio(toma.idRecordatorio)
             res.fold(
                 onSuccess = {
-                    _state.update {
-                        it.copy(
-                            isActionInFlight = false,
-                            selectedTomaForModal = null,
-                            seniorPenaltyModal = null,
-                            snackbarMessage = if (it.esAdultoMayor) {
-                                "✓ Toma registrada a tiempo: ${toma.nombreMedicamento}"
-                            } else {
-                                "+25 XP • Toma registrada: ${toma.nombreMedicamento}"
-                            },
-                            mediReaction = nextReaction(it, MediReactionKind.TAKEN)
-                        )
-                    }
+                    _state.update { it.copy(isActionInFlight = false) }
                     cargarDatos(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update {
-                        it.copy(
+                    _state.update { prev ->
+                        applyOptimisticStatus(prev, toma.idRecordatorio, "pendiente").copy(
                             isActionInFlight = false,
                             snackbarMessage = err.message ?: "No se pudo registrar la toma"
                         )
@@ -323,25 +337,25 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
     fun onTomarPorId(idRecordatorio: Int, nombreMedicamento: String) {
         if (_state.value.isActionInFlight) return
-        _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
+        _state.update { prev ->
+            applyOptimisticStatus(prev, idRecordatorio, "tomado").copy(
+                isActionInFlight = true,
+                selectedTomaForModal = null,
+                seniorPenaltyModal = null,
+                snackbarMessage = "✓ Toma confirmada: $nombreMedicamento",
+                mediReaction = nextReaction(prev, MediReactionKind.TAKEN)
+            )
+        }
         viewModelScope.launch {
             val res = repository.tomarRecordatorio(idRecordatorio)
             res.fold(
                 onSuccess = {
-                    _state.update {
-                        it.copy(
-                            isActionInFlight = false,
-                            selectedTomaForModal = null,
-                            seniorPenaltyModal = null,
-                            snackbarMessage = "✓ Toma confirmada: $nombreMedicamento",
-                            mediReaction = nextReaction(it, MediReactionKind.TAKEN)
-                        )
-                    }
+                    _state.update { it.copy(isActionInFlight = false) }
                     cargarDatos(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update {
-                        it.copy(
+                    _state.update { prev ->
+                        applyOptimisticStatus(prev, idRecordatorio, "pendiente").copy(
                             isActionInFlight = false,
                             snackbarMessage = err.message ?: "No se pudo registrar la toma"
                         )

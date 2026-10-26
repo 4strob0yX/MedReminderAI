@@ -254,3 +254,12 @@ data class CuidadorPanelResponseDto(
     @SerializedName("tomas_hoy") val tomasHoy: List<TomaSupervisadaItemDto> = emptyList(),
     @SerializedName("estado_riesgo") val estadoRiesgo: String = "estable"
 )
+
+data class DashboardUnificadoDto(
+    val medicamentos: List<MedicamentoDto> = emptyList(),
+    val tratamientos: List<TratamientoDto> = emptyList(),
+    @SerializedName("recordatorios_hoy") val recordatoriosHoy: List<RecordatorioDto> = emptyList(),
+    val alergias: List<AlergiaDto> = emptyList(),
+    @SerializedName("contactos_apoyo") val contactosApoyo: List<ContactoApoyoDto> = emptyList(),
+    val perfil: UsuarioDto? = null
+)

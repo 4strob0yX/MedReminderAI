@@ -11,7 +11,7 @@ from app.models.recordatorio import Recordatorio
 from app.models.tratamiento import Tratamiento
 from app.models.usuario import Usuario
 from app.schemas.tratamiento import TratamientoCreate, TratamientoOut, TratamientoUpdate
-from app.services.recordatorio_service import generar_recordatorios
+from app.services.recordatorio_service import generar_recordatorios, invalidar_cache_horizonte
 
 router = APIRouter(prefix="/tratamientos", tags=["tratamientos"])
 
@@ -52,6 +52,7 @@ def crear_tratamiento(
     db.add_all(generar_recordatorios(trat))
     db.commit()
     db.refresh(trat)
+    invalidar_cache_horizonte(user.id_usuario)
     return trat
 
 
@@ -130,6 +131,7 @@ def actualizar_tratamiento(
 
     db.commit()
     db.refresh(trat)
+    invalidar_cache_horizonte(user.id_usuario)
     return trat
 
 
@@ -146,4 +148,5 @@ def eliminar_tratamiento(
 
     db.delete(trat)
     db.commit()
+    invalidar_cache_horizonte(user.id_usuario)
     return None

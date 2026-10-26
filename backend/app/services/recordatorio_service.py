@@ -20,6 +20,13 @@ from app.schemas.recordatorio import (
 HORIZONTE_DIAS = 7  # Proyección continua de 7 días
 VENTANA_TOLERANCIA_HORAS = 2  # Vencimiento automático de pendientes tras 2 horas
 
+_ULTIMO_HORIZONTE_USUARIO: dict[int, datetime] = {}
+
+
+def invalidar_cache_horizonte(id_usuario: int) -> None:
+    """Invalida la caché de verificación de horizonte cuando se crean o editan tratamientos."""
+    _ULTIMO_HORIZONTE_USUARIO.pop(id_usuario, None)
+
 DIAS_SEMANA_ESP = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 FRANJAS_MAPA_CALOR = [
     "Mañana (6-11h)",
@@ -73,8 +80,15 @@ def asegurar_horizonte_recordatorios(
     """1) Marca como `omitido` los recordatorios `pendiente` cuya ventana de horario
        ya venció (`hora_programada < ahora - 2h`) y registra en `historial_toma`.
     2) Extiende el horizonte móvil de 7 días para todos los tratamientos activos del usuario."""
+    usar_cache_tiempo = ahora is None
     if ahora is None:
         ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    if usar_cache_tiempo:
+        ultimo = _ULTIMO_HORIZONTE_USUARIO.get(id_usuario)
+        if ultimo is not None and (ahora - ultimo).total_seconds() < 25:
+            return
+        _ULTIMO_HORIZONTE_USUARIO[id_usuario] = ahora
 
     hubo_cambios = False
 
@@ -112,7 +126,7 @@ def asegurar_horizonte_recordatorios(
         )
         hubo_cambios = True
 
-    # 2. Extensión de horizonte móvil de 7 días para tratamientos activos
+    # 2. Extensión de horizonte móvil de 7 días para tratamientos activos (1 sola consulta agrupada en vez de N+1)
     stmt_trats = (
         select(Tratamiento)
         .join(Medicamento, Medicamento.id_medicamento == Tratamiento.id_medicamento)
@@ -124,6 +138,16 @@ def asegurar_horizonte_recordatorios(
     tratamientos = db.scalars(stmt_trats).all()
     umbral_ahora = ahora.replace(microsecond=0) - timedelta(minutes=2)
 
+    ids_trat = [t.id_tratamiento for t in tratamientos if t.frecuencia_horas > 0]
+    max_por_trat: dict[int, datetime] = {}
+    if ids_trat:
+        rows_max = db.execute(
+            select(Recordatorio.id_tratamiento, func.max(Recordatorio.hora_programada))
+            .where(Recordatorio.id_tratamiento.in_(ids_trat))
+            .group_by(Recordatorio.id_tratamiento)
+        ).all()
+        max_por_trat = {r[0]: r[1] for r in rows_max if r[1] is not None}
+
     for trat in tratamientos:
         if trat.frecuencia_horas <= 0:
             continue
@@ -133,11 +157,7 @@ def asegurar_horizonte_recordatorios(
         if limite <= umbral_ahora:
             continue
 
-        max_existente: datetime | None = db.scalar(
-            select(func.max(Recordatorio.hora_programada)).where(
-                Recordatorio.id_tratamiento == trat.id_tratamiento
-            )
-        )
+        max_existente: datetime | None = max_por_trat.get(trat.id_tratamiento)
 
         paso = timedelta(hours=trat.frecuencia_horas)
         hora = trat.fecha_inicio

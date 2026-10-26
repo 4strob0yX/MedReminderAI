@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -6,6 +7,7 @@ from pymongo import MongoClient
 from app.core.config import settings
 
 _mongo_client: MongoClient | None = None
+_mongo_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="mongo-event")
 
 
 def get_mongo_client() -> MongoClient:
@@ -14,9 +16,10 @@ def get_mongo_client() -> MongoClient:
     if _mongo_client is None:
         _mongo_client = MongoClient(
             settings.mongo_url,
-            serverSelectionTimeoutMS=2000,
-            connectTimeoutMS=2000,
-            socketTimeoutMS=2000,
+            serverSelectionTimeoutMS=1200,
+            connectTimeoutMS=1200,
+            socketTimeoutMS=1500,
+            maxPoolSize=16,
         )
     return _mongo_client
 
@@ -27,25 +30,30 @@ def verificar_mongo_ping() -> None:
     client.admin.command("ping")
 
 
+def _insert_mongo_doc(documento: dict[str, Any]) -> None:
+    try:
+        client = get_mongo_client()
+        db = client[settings.mongo_db]
+        db["eventos_clinicos"].insert_one(documento)
+    except Exception:
+        pass
+
+
 def registrar_evento_mongo(
     evento: str,
     id_usuario: int | None = None,
     detalle: dict[str, Any] | None = None,
 ) -> bool:
-    """Registra de forma no bloqueante y tolerante a fallos un evento clínico
-    en la colección `eventos_clinicos` de MongoDB (`medicamento_creado`,
-    `toma_confirmada`, `toma_pospuesta`, `toma_omitida`, `castigo_activado`,
-    `alerta_alergia`, etc.). Nunca propaga errores a la petición HTTP."""
+    """Registra de forma asíncrona (no bloqueante, 0ms en el hilo HTTP) y tolerante a fallos
+    un evento clínico en la colección `eventos_clinicos` de MongoDB."""
     try:
-        client = get_mongo_client()
-        db = client[settings.mongo_db]
         documento = {
             "evento": evento,
             "id_usuario": id_usuario,
             "detalle": detalle or {},
             "timestamp": datetime.now(timezone.utc),
         }
-        db["eventos_clinicos"].insert_one(documento)
+        _mongo_executor.submit(_insert_mongo_doc, documento)
         return True
     except Exception:
         return False

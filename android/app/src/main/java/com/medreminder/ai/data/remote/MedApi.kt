@@ -63,6 +63,12 @@ interface MedApi {
     @GET("tratamientos")
     suspend fun listarTratamientos(): List<TratamientoDto>
 
+    @GET("recordatorios/dashboard")
+    suspend fun obtenerDashboardUnificado(
+        @Query("fecha") fecha: String? = null,
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): DashboardUnificadoDto
+
     @GET("recordatorios")
     suspend fun listarRecordatorios(
         @Query("fecha") fecha: String? = null,

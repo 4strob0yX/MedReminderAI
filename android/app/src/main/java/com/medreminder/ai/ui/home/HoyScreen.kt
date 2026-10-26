@@ -2108,26 +2108,6 @@ private fun ConnectedTimelineTomaRow(
     val isPendiente = item.estado == "pendiente"
     val isOmitido = item.estado == "omitido"
 
-    val infinitePulse = rememberInfiniteTransition(label = "pulse_node")
-    val radarScale by infinitePulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 2.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "radar_scale"
-    )
-    val radarAlpha by infinitePulse.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "radar_alpha"
-    )
-
     val nodeColor = when {
         isTomado -> Color(0xFF10B981)
         isOmitido -> AlertRedText
@@ -2149,12 +2129,31 @@ private fun ConnectedTimelineTomaRow(
                 .fillMaxHeight()
                 .padding(top = 22.dp)
         ) {
-            // Nodo iluminado de estado con halo de radar animado en dosis pendientes
+            // Nodo iluminado de estado con halo de radar animado SOLO en dosis pendientes (ahorra GPU en filas resueltas)
             Box(
                 modifier = Modifier.size(24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (isPendiente) {
+                    val infinitePulse = rememberInfiniteTransition(label = "pulse_node")
+                    val radarScale by infinitePulse.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 2.4f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1600, easing = EaseInOutSine),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "radar_scale"
+                    )
+                    val radarAlpha by infinitePulse.animateFloat(
+                        initialValue = 0.55f,
+                        targetValue = 0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1600, easing = EaseInOutSine),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "radar_alpha"
+                    )
                     Box(
                         modifier = Modifier
                             .size(18.dp)

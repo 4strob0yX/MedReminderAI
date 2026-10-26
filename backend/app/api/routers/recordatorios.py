@@ -1,18 +1,25 @@
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.mongo import registrar_evento_mongo
 from app.db.session import get_db
+from app.models.alergia import AlergiaUsuario
+from app.models.contacto import ContactoApoyo
 from app.models.medicamento import Medicamento
 from app.models.recordatorio import HistorialToma, Recordatorio
 from app.models.tratamiento import Tratamiento
 from app.models.usuario import Usuario
+from app.schemas.alergia import AlergiaOut
 from app.schemas.auth import UsuarioOut
+from app.schemas.contacto import ContactoOut
+from app.schemas.medicamento import MedicamentoOut
 from app.schemas.recordatorio import EstadisticasOut, RecordatorioOut
+from app.schemas.tratamiento import TratamientoOut
 from app.api.routers.cuidador import registrar_alerta_cuidador_db
 from app.services.recordatorio_service import (
     asegurar_horizonte_recordatorios,
@@ -21,6 +28,15 @@ from app.services.recordatorio_service import (
 )
 
 router = APIRouter(prefix="/recordatorios", tags=["recordatorios"])
+
+
+class DashboardUnificadoOut(BaseModel):
+    medicamentos: list[MedicamentoOut]
+    tratamientos: list[TratamientoOut]
+    recordatorios_hoy: list[RecordatorioOut]
+    alergias: list[AlergiaOut]
+    contactos_apoyo: list[ContactoOut]
+    perfil: UsuarioOut
 
 POSPONER_MINUTOS = 30  # decision del Tech Lead: valor fijo
 MAX_POSPOSICIONES = 3  # al llegar el contador a 3 se omite automaticamente
@@ -86,6 +102,85 @@ def _construir_out(
 
 def _log(db: Session, rec: Recordatorio, estado: str, notas: str | None = None) -> None:
     db.add(HistorialToma(id_recordatorio=rec.id_recordatorio, estado_final=estado, notas=notas))
+
+
+@router.get("/dashboard", response_model=DashboardUnificadoOut)
+def obtener_dashboard_unificado(
+    fecha: date | None = Query(default=None),
+    tz_offset_minutes: int = Query(default=0),
+    user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Endpoint consolidado de ultra-baja latencia: devuelve medicamentos, tratamientos,
+    recordatorios del día, alergias, contactos de apoyo y perfil en 1 sola petición HTTP."""
+    asegurar_horizonte_recordatorios(db, user.id_usuario)
+    bloqueado_castigo = esta_posponer_bloqueado(
+        db, user.id_usuario, tz_offset_minutes=tz_offset_minutes
+    )
+
+    meds = list(
+        db.scalars(
+            select(Medicamento)
+            .where(Medicamento.id_usuario == user.id_usuario)
+            .order_by(Medicamento.id_medicamento)
+        ).all()
+    )
+    meds_by_id = {m.id_medicamento: m for m in meds}
+
+    trats = list(
+        db.scalars(
+            select(Tratamiento)
+            .join(Medicamento, Medicamento.id_medicamento == Tratamiento.id_medicamento)
+            .where(Medicamento.id_usuario == user.id_usuario)
+            .order_by(Tratamiento.id_tratamiento)
+        ).all()
+    )
+
+    stmt_recs = (
+        select(Recordatorio, Medicamento)
+        .join(Tratamiento, Tratamiento.id_tratamiento == Recordatorio.id_tratamiento)
+        .join(Medicamento, Medicamento.id_medicamento == Tratamiento.id_medicamento)
+        .where(Medicamento.id_usuario == user.id_usuario)
+    )
+    if fecha is not None:
+        inicio_utc = datetime.combine(fecha, time.min) - timedelta(
+            minutes=tz_offset_minutes
+        )
+        stmt_recs = stmt_recs.where(
+            Recordatorio.hora_programada >= inicio_utc,
+            Recordatorio.hora_programada < inicio_utc + timedelta(days=1),
+        )
+    stmt_recs = stmt_recs.order_by(Recordatorio.hora_programada, Recordatorio.id_recordatorio)
+    rows_recs = db.execute(stmt_recs).all()
+    recs_out = [
+        _construir_out(rec, med, castigo_bloquea_posponer=bloqueado_castigo)
+        for rec, med in rows_recs
+    ]
+
+    alergias_list = list(
+        db.scalars(
+            select(AlergiaUsuario)
+            .where(AlergiaUsuario.id_usuario == user.id_usuario)
+            .order_by(AlergiaUsuario.id_alergia.desc())
+        ).all()
+    )
+
+    contactos_list = list(
+        db.scalars(
+            select(ContactoApoyo)
+            .where(ContactoApoyo.id_usuario == user.id_usuario)
+            .order_by(ContactoApoyo.es_principal.desc(), ContactoApoyo.id_contacto.asc())
+        ).all()
+    )
+
+    return DashboardUnificadoOut(
+        medicamentos=[MedicamentoOut.model_validate(m) for m in meds],
+        tratamientos=[TratamientoOut.model_validate(t) for t in trats],
+        recordatorios_hoy=recs_out,
+        alergias=[AlergiaOut.model_validate(a) for a in alergias_list],
+        contactos_apoyo=[ContactoOut.model_validate(c) for c in contactos_list],
+        perfil=UsuarioOut.model_validate(user),
+    )
 
 
 @router.get("/estadisticas", response_model=EstadisticasOut)

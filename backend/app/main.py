@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 
 from app.api.routers import (
@@ -97,6 +98,30 @@ def asegurar_esquema_mysql() -> None:
                     ")"
                 )
             )
+
+            # Índices compuestos de alto rendimiento para acelerar consultas de dashboard y recordatorios
+            indices_optimizacion = [
+                ("medicamento", "idx_med_usuario", "id_usuario"),
+                ("tratamiento", "idx_trat_med_estado", "id_medicamento, estado"),
+                ("recordatorio", "idx_rec_trat_hora", "id_tratamiento, hora_programada"),
+                ("recordatorio", "idx_rec_estado_hora", "estado, hora_programada"),
+                ("historial_toma", "idx_hist_rec_estado", "id_recordatorio, estado_final"),
+            ]
+            filas_idx = conn.execute(
+                text(
+                    "SELECT LOWER(index_name) FROM information_schema.statistics "
+                    "WHERE table_schema = DATABASE()"
+                )
+            ).all()
+            indices_existentes = {fila[0] for fila in filas_idx}
+            for tabla_idx, nombre_idx, cols_idx in indices_optimizacion:
+                if nombre_idx.lower() not in indices_existentes:
+                    try:
+                        conn.execute(
+                            text(f"CREATE INDEX {nombre_idx} ON {tabla_idx} ({cols_idx})")
+                        )
+                    except Exception:
+                        pass
     except Exception:
         # No bloquear el arranque si la BD aún no está lista en entorno de test aislado
         pass
@@ -109,6 +134,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="MedReminder AI API", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.include_router(health.router)
 app.include_router(auth.router)

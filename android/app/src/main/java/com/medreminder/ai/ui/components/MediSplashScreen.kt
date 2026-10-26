@@ -86,15 +86,15 @@ fun MediSplashScreen(
     var showTexts by remember { mutableStateOf(true) }
     var isExiting by remember { mutableStateOf(false) }
 
-    // Salida suave estilo YouTube: zoom ligero (1.08f) y desvanecimiento
+    // Salida suave estilo YouTube: zoom ligero (1.06f) y desvanecimiento ágil (200ms)
     val exitAlpha by animateFloatAsState(
         targetValue = if (isExiting) 0f else 1f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label = "splash_exit_alpha"
     )
     val exitScale by animateFloatAsState(
-        targetValue = if (isExiting) 1.08f else 1f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        targetValue = if (isExiting) 1.06f else 1f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label = "splash_exit_scale"
     )
 
@@ -131,21 +131,21 @@ fun MediSplashScreen(
     )
 
     LaunchedEffect(Unit) {
-        // 1. Pop-in elástico con resorte de Medi
+        // 1. Pop-in elástico rápido con resorte de Medi
         entranceScale.animateTo(
             targetValue = 1f,
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
+                stiffness = Spring.StiffnessMedium
             )
         )
 
-        // 2. Mantener tiempo suficiente para deleitar al usuario y precargar datos en segundo plano
+        // 2. Mantener tiempo ágil para precargar datos en segundo plano
         delay(minDisplayTimeMillis)
 
-        // 3. Iniciar salida cinematográfica estilo YouTube
+        // 3. Iniciar salida rápida estilo YouTube
         isExiting = true
-        delay(400)
+        delay(200)
 
         // 4. Notificar finalización para desmontar el splash
         onSplashFinished()

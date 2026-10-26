@@ -50,13 +50,15 @@ class MainActivity : ComponentActivity() {
             HomeViewModel.Factory(appContainer.medRepository)
         }
 
-        // Calentar motor TextToSpeech para respuesta instantánea de lectura
-        com.medreminder.ai.notifications.TtsHelper.init(this)
-
         setContent {
             MedReminderAITheme {
                 val authState by authViewModel.state.collectAsState()
                 var splashCompleted by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    // Calentar motor TextToSpeech de forma diferida sin bloquear el primer frame
+                    com.medreminder.ai.notifications.TtsHelper.init(this@MainActivity)
+                }
 
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
@@ -104,7 +106,7 @@ class MainActivity : ComponentActivity() {
                             onSplashFinished = {
                                 splashCompleted = true
                             },
-                            minDisplayTimeMillis = 1800L
+                            minDisplayTimeMillis = 450L
                         )
                     }
                 }

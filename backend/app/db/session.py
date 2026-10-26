@@ -8,6 +8,9 @@ from app.core.config import settings
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=1800,
     # La sesion MySQL trabaja en UTC (el servidor ya corre con +00:00).
     connect_args={"init_command": "SET time_zone = '+00:00'"},
 )
