@@ -11,6 +11,7 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
+    UpdatePerfilEdadRequest,
     UsuarioOut,
 )
 from app.services import auth_service
@@ -63,4 +64,18 @@ def reset_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UsuarioOut)
 def me(user: Usuario = Depends(get_current_user)):
+    return user
+
+
+@router.patch("/me/edad", response_model=UsuarioOut)
+def actualizar_fecha_nacimiento(
+    body: UpdatePerfilEdadRequest,
+    user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user.fecha_nacimiento = body.fecha_nacimiento
+    if body.rol in ("paciente", "cuidador"):
+        user.rol = body.rol
+    db.commit()
+    db.refresh(user)
     return user

@@ -8,6 +8,7 @@ from app.api.routers import (
     alergias,
     auth,
     contactos,
+    cuidador,
     health,
     medicamentos,
     recordatorios,
@@ -49,6 +50,53 @@ def asegurar_esquema_mysql() -> None:
                                 "UPDATE medicamento SET stock_inicial = GREATEST(cantidad_stock, 30)"
                             )
                         )
+
+            # Migración automática de columnas nuevas en `usuario` (`fecha_nacimiento`, `rol`)
+            filas_usr = conn.execute(
+                text(
+                    "SELECT LOWER(column_name) FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = 'usuario'"
+                )
+            ).all()
+            existentes_usr = {fila[0] for fila in filas_usr}
+            if existentes_usr:
+                if "fecha_nacimiento" not in existentes_usr:
+                    conn.execute(
+                        text("ALTER TABLE usuario ADD COLUMN fecha_nacimiento DATE NULL")
+                    )
+                    conn.execute(
+                        text(
+                            "UPDATE usuario SET fecha_nacimiento = '1957-05-14' "
+                            "WHERE fecha_nacimiento IS NULL"
+                        )
+                    )
+                if "rol" not in existentes_usr:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE usuario ADD COLUMN rol VARCHAR(30) NOT NULL DEFAULT 'paciente'"
+                        )
+                    )
+
+            # Tabla persistente de alertas para la Vista del Cuidador
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS alerta_cuidador ("
+                    "id_alerta INT AUTO_INCREMENT PRIMARY KEY, "
+                    "id_usuario INT NOT NULL, "
+                    "tipo_alerta VARCHAR(40) NOT NULL DEFAULT 'advertencia_normal', "
+                    "accion_origen VARCHAR(40) NOT NULL DEFAULT 'posponer', "
+                    "nombre_medicamento VARCHAR(160) NOT NULL, "
+                    "dosis VARCHAR(80) NOT NULL DEFAULT '', "
+                    "es_critico BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "mensaje VARCHAR(500) NOT NULL, "
+                    "nombre_cuidador VARCHAR(160) NOT NULL DEFAULT 'Cuidador Principal', "
+                    "telefono_cuidador VARCHAR(60) NOT NULL DEFAULT '', "
+                    "atendida BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    "INDEX idx_alerta_usuario (id_usuario)"
+                    ")"
+                )
+            )
     except Exception:
         # No bloquear el arranque si la BD aún no está lista en entorno de test aislado
         pass
@@ -69,4 +117,5 @@ app.include_router(tratamientos.router)
 app.include_router(recordatorios.router)
 app.include_router(alergias.router)
 app.include_router(contactos.router)
+app.include_router(cuidador.router)
 app.include_router(ai.router)

@@ -8,8 +8,11 @@ import com.medreminder.ai.data.remote.AiPrescriptionScanRequestDto
 import com.medreminder.ai.data.remote.AiPrescriptionScanResponseDto
 import com.medreminder.ai.data.remote.AlergiaCreateDto
 import com.medreminder.ai.data.remote.AlergiaDto
+import com.medreminder.ai.data.remote.AlertaCuidadorCreateDto
+import com.medreminder.ai.data.remote.AlertaCuidadorDto
 import com.medreminder.ai.data.remote.ContactoApoyoCreateDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
+import com.medreminder.ai.data.remote.CuidadorPanelResponseDto
 import com.medreminder.ai.data.remote.MedApi
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.data.remote.MedicamentoCreateDto
@@ -18,6 +21,8 @@ import com.medreminder.ai.data.remote.RecordatorioDto
 import com.medreminder.ai.data.remote.StockUpdateDto
 import com.medreminder.ai.data.remote.TratamientoCreateDto
 import com.medreminder.ai.data.remote.TratamientoDto
+import com.medreminder.ai.data.remote.UpdatePerfilEdadRequestDto
+import com.medreminder.ai.data.remote.UsuarioDto
 import com.medreminder.ai.data.remote.VerificarAlergiasInDto
 import com.medreminder.ai.data.remote.VerificarAlergiasOutDto
 import com.medreminder.ai.data.remote.parseApiErrorDetail
@@ -33,7 +38,8 @@ data class DashboardBundle(
     val recordatoriosHoy: List<RecordatorioDto>,
     val alergias: List<AlergiaDto>,
     val contactosApoyo: List<ContactoApoyoDto>,
-    val nombreUsuario: String? = null
+    val nombreUsuario: String? = null,
+    val perfil: UsuarioDto? = null
 )
 
 class MedRepository(private val api: MedApi) {
@@ -56,13 +62,15 @@ class MedRepository(private val api: MedApi) {
                 runCatching { api.obtenerPerfil() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
             }
 
+            val perfil = perfilDef.await()
             DashboardBundle(
                 medicamentos = medsDef.await(),
                 tratamientos = tratsDef.await(),
                 recordatoriosHoy = recsDef.await(),
                 alergias = alergiasDef.await(),
                 contactosApoyo = contactosDef.await(),
-                nombreUsuario = perfilDef.await()?.nombre
+                nombreUsuario = perfil?.nombre,
+                perfil = perfil
             )
         }
     }.recoverCatching {
@@ -297,6 +305,52 @@ class MedRepository(private val api: MedApi) {
                 imageBase64 = imageBase64?.ifBlank { null }
             )
         )
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    // --- Vista del Cuidador y Edad del Perfil ---
+
+    suspend fun actualizarPerfilEdad(fechaNacimiento: String, rol: String? = null): Result<UsuarioDto> = runCatching {
+        api.actualizarPerfilEdad(UpdatePerfilEdadRequestDto(fechaNacimiento = fechaNacimiento, rol = rol))
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun obtenerPanelCuidador(tzOffsetMinutes: Int? = null): Result<CuidadorPanelResponseDto> = runCatching {
+        api.obtenerPanelCuidador(tzOffsetMinutes = tzOffsetMinutes)
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun dispararAlertaCuidador(
+        tipoAlerta: String,
+        medicamentoNombre: String,
+        dosis: String,
+        accion: String,
+        esCritico: Boolean,
+        mensaje: String
+    ): Result<AlertaCuidadorDto> = runCatching {
+        api.dispararAlertaCuidador(
+            AlertaCuidadorCreateDto(
+                tipoAlerta = tipoAlerta,
+                medicamentoNombre = medicamentoNombre,
+                dosis = dosis,
+                accion = accion,
+                esCritico = esCritico,
+                mensaje = mensaje
+            )
+        )
+    }.recoverCatching {
+        if (it is CancellationException) throw it
+        throw Exception(mapError(it))
+    }
+
+    suspend fun marcarAlertaCuidadorAtendida(idAlerta: Int): Result<AlertaCuidadorDto> = runCatching {
+        api.marcarAlertaCuidadorAtendida(idAlerta)
     }.recoverCatching {
         if (it is CancellationException) throw it
         throw Exception(mapError(it))

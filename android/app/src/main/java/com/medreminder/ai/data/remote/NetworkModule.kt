@@ -26,10 +26,11 @@ class NetworkModule(private val tokenStore: TokenStore) {
     companion object {
         // Direcciones candidatas en red local de desarrollo:
         val BASE_CANDIDATES = listOf(
-            "172.20.10.2",   // Mac host actual (Hotspot / Red actual)
+            "127.0.0.1",     // Conexión mediante adb reverse sobre USB
+            "192.168.1.20",  // Mac host en red Wi-Fi actual
+            "172.20.10.2",   // Mac host en Hotspot
             "192.168.0.228", // Mac host en red de hogar
             "192.168.0.242",
-            "127.0.0.1",     // Conexión mediante adb reverse sobre USB
             "10.0.2.2"       // Loopback estándar del emulador de Android Studio
         )
 
@@ -51,6 +52,7 @@ class NetworkModule(private val tokenStore: TokenStore) {
                                 val dot = ip.lastIndexOf('.')
                                 if (dot != -1) {
                                     val prefix = ip.substring(0, dot + 1)
+                                    list.add("${prefix}20")
                                     list.add("${prefix}2")
                                     list.add("${prefix}1")
                                     list.add("${prefix}228")
@@ -66,7 +68,7 @@ class NetworkModule(private val tokenStore: TokenStore) {
         }
 
         fun getAllCandidates(): List<String> {
-            return (listOf("127.0.0.1", "172.20.10.2", "10.0.2.2") + detectSubnetCandidates() + BASE_CANDIDATES).distinct()
+            return (listOf("127.0.0.1", "192.168.1.20", "172.20.10.2", "10.0.2.2") + detectSubnetCandidates() + BASE_CANDIDATES).distinct()
         }
     }
 

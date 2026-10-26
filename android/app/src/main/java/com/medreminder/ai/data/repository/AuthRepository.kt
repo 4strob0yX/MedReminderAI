@@ -20,8 +20,24 @@ class AuthRepository(
     suspend fun login(email: String, password: String): Result<Unit> =
         call { api.login(LoginRequest(email, password)) }
 
-    suspend fun register(nombre: String, email: String, password: String): Result<Unit> =
-        call { api.register(RegisterRequest(nombre, email, password)) }
+    suspend fun register(
+        nombre: String,
+        email: String,
+        password: String,
+        fechaNacimiento: String? = null,
+        rol: String = "paciente"
+    ): Result<Unit> =
+        call {
+            api.register(
+                RegisterRequest(
+                    nombre = nombre,
+                    email = email,
+                    password = password,
+                    fechaNacimiento = fechaNacimiento?.trim()?.ifBlank { null },
+                    rol = rol
+                )
+            )
+        }
 
     suspend fun resetPassword(email: String, newPassword: String): Result<String> =
         try {

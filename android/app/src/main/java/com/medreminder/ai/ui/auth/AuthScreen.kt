@@ -119,6 +119,8 @@ fun AuthRoute(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
         onNombreChange = viewModel::onNombreChange,
         onEmailChange = viewModel::onEmailChange,
         onPasswordChange = viewModel::onPasswordChange,
+        onFechaNacimientoChange = viewModel::onFechaNacimientoChange,
+        onRolChange = viewModel::onRolChange,
         onTogglePasswordVisibility = viewModel::onTogglePasswordVisibility,
         onSubmit = viewModel::onSubmit,
         onToggleMode = viewModel::onToggleMode,
@@ -138,6 +140,8 @@ fun AuthScreen(
     onNombreChange: (String) -> Unit,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onFechaNacimientoChange: (String) -> Unit = {},
+    onRolChange: (String) -> Unit = {},
     onTogglePasswordVisibility: () -> Unit,
     onSubmit: () -> Unit,
     onToggleMode: () -> Unit,
@@ -177,6 +181,8 @@ fun AuthScreen(
                 onNombreChange = onNombreChange,
                 onEmailChange = onEmailChange,
                 onPasswordChange = onPasswordChange,
+                onFechaNacimientoChange = onFechaNacimientoChange,
+                onRolChange = onRolChange,
                 onTogglePasswordVisibility = onTogglePasswordVisibility,
                 onSubmit = onSubmit,
                 onToggleMode = onToggleMode,
@@ -614,17 +620,49 @@ private fun RegisterContent(
     onNombreChange: (String) -> Unit,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onFechaNacimientoChange: (String) -> Unit = {},
+    onRolChange: (String) -> Unit = {},
     onTogglePasswordVisibility: () -> Unit,
     onSubmit: () -> Unit,
     onToggleMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val passLen = state.password.length
     val strengthBars = when {
         passLen >= 10 -> 3
         passLen >= 8 -> 2
         passLen >= 1 -> 1
         else -> 0
+    }
+
+    val edadCalculada = remember(state.fechaNacimiento) {
+        runCatching {
+            val parts = state.fechaNacimiento.trim().split("-")
+            if (parts.size == 3) {
+                val birth = java.time.LocalDate.of(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+                val today = java.time.LocalDate.now()
+                java.time.Period.between(birth, today).years.coerceIn(1, 120)
+            } else 68
+        }.getOrDefault(68)
+    }
+    val esAdultoMayor = edadCalculada >= 60
+
+    val abrirCalendarioNacimiento = {
+        val parts = state.fechaNacimiento.split("-")
+        val initY = parts.getOrNull(0)?.toIntOrNull() ?: 1957
+        val initM = (parts.getOrNull(1)?.toIntOrNull() ?: 5) - 1
+        val initD = parts.getOrNull(2)?.toIntOrNull() ?: 14
+        android.app.DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val formatted = String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth)
+                onFechaNacimientoChange(formatted)
+            },
+            initY,
+            initM.coerceIn(0, 11),
+            initD.coerceIn(1, 31)
+        ).show()
     }
 
     Column(
@@ -645,13 +683,60 @@ private fun RegisterContent(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Configura tu perfil en un solo paso para recibir recordatorios puntuales y llevar tu racha de salud.",
+            text = "Configura tu perfil indicando tu fecha de nacimiento para adaptar el seguimiento clínico a tu edad.",
             fontSize = 15.sp,
             color = TextSecondary,
             lineHeight = 21.sp
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
+
+        // Selector de Rol: Paciente vs Cuidador
+        FieldLabelRow(label = "Tipo de perfil", rightHint = "Selecciona tu rol")
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            listOf(
+                "paciente" to "Paciente",
+                "cuidador" to "Cuidador / Familiar"
+            ).forEach { (key, label) ->
+                val selected = state.rol == key
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (selected) TealPrimary else CardBackground,
+                    border = BorderStroke(1.5.dp, if (selected) TealPrimary else InputBorderColor),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(enabled = !state.isLoading) { onRolChange(key) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (key == "cuidador") Icons.Outlined.HealthAndSafety else Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = if (selected) Color.White else TealDark,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = label,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected) Color.White else TextPrimary
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
 
         // Nombre completo
         FieldLabelRow(label = "Nombre completo", rightHint = "Requerido")
@@ -664,6 +749,117 @@ private fun RegisterContent(
             enabled = !state.isLoading,
             leadingIcon = Icons.Outlined.Person
         )
+
+        Spacer(Modifier.height(18.dp))
+
+        // Fecha de nacimiento y cálculo automático de edad/rango
+        FieldLabelRow(
+            label = "Fecha de nacimiento",
+            rightHint = "Edad: $edadCalculada años"
+        )
+        Spacer(Modifier.height(8.dp))
+        ClinicalTextField(
+            value = state.fechaNacimiento,
+            onValueChange = onFechaNacimientoChange,
+            placeholder = "YYYY-MM-DD (ej. 1957-05-14)",
+            error = state.fechaNacimientoError,
+            enabled = !state.isLoading,
+            leadingIcon = Icons.Outlined.AccessAlarm,
+            trailingIcon = {
+                Text(
+                    text = "Calendario",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TealPrimary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = !state.isLoading) { abrirCalendarioNacimiento() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        // Chips rápidos de rango de edad para prueba ágil
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (esAdultoMayor) Color(0xFFFFF3E0) else SoftWarmSurface,
+                border = BorderStroke(1.dp, if (esAdultoMayor) Color(0xFFFF9800) else InputBorderColor),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = !state.isLoading) { onFechaNacimientoChange("1957-05-14") }
+            ) {
+                Text(
+                    text = "Adulto Mayor (60+ años)",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (esAdultoMayor) Color(0xFFE65100) else TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (!esAdultoMayor) TealBadgeBg else SoftWarmSurface,
+                border = BorderStroke(1.dp, if (!esAdultoMayor) TealPrimary else InputBorderColor),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = !state.isLoading) { onFechaNacimientoChange("1998-08-20") }
+            ) {
+                Text(
+                    text = "Joven / Adulto (<60 años)",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (!esAdultoMayor) TealDark else TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Tarjeta informativa de modo adaptativo según el rango de edad calculado
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = if (esAdultoMayor) Color(0xFFFFF8E1) else TealSoftBg,
+            border = BorderStroke(
+                1.dp,
+                if (esAdultoMayor) Color(0xFFFFB74D) else TealPrimary.copy(alpha = 0.35f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = if (esAdultoMayor) {
+                        "Rango: Adulto Mayor ($edadCalculada años) • Supervisión de Cuidador Activa"
+                    } else {
+                        "Rango: Joven / Adulto ($edadCalculada años) • Racha y Honor Activos"
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (esAdultoMayor) Color(0xFFE65100) else TealDark
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = if (esAdultoMayor) {
+                        "Al omitir o posponer un medicamento normal se mostrará una alerta indicando que se notificará al cuidador; si es crítico, la alerta al cuidador se enviará automáticamente."
+                    } else {
+                        "Muestra la Racha de Fuego diaria, escudos protectores y penalización de Rango de Honor por omisiones."
+                    },
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 16.sp
+                )
+            }
+        }
 
         Spacer(Modifier.height(18.dp))
 

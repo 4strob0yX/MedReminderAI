@@ -200,3 +200,57 @@ data class AiPrescriptionScanResponseDto(
     @SerializedName("model_used") val modelUsed: String = "medi-clinico",
     @SerializedName("using_ollama") val usingOllama: Boolean = true
 )
+
+// --- Supervisión y Vista del Cuidador (Adultos Mayores y Alertas Críticas) ---
+
+data class AlertaCuidadorCreateDto(
+    @SerializedName("tipo_alerta") val tipoAlerta: String, // "advertencia_normal" | "critica_automatica"
+    @SerializedName("medicamento_nombre") val medicamentoNombre: String,
+    val dosis: String,
+    val accion: String, // "posponer" | "omitir"
+    @SerializedName("es_critico") val esCritico: Boolean = false,
+    val mensaje: String
+)
+
+data class AlertaCuidadorDto(
+    @SerializedName("id_alerta") val idAlerta: Int,
+    @SerializedName("id_paciente") val idPaciente: Int,
+    @SerializedName("nombre_paciente") val nombrePaciente: String,
+    @SerializedName("edad_paciente") val edadPaciente: Int,
+    @SerializedName("tipo_alerta") val tipoAlerta: String,
+    @SerializedName("medicamento_nombre") val medicamentoNombre: String,
+    val dosis: String,
+    val accion: String,
+    @SerializedName("es_critico") val esCritico: Boolean,
+    val mensaje: String,
+    val atendida: Boolean = false,
+    @SerializedName("fecha_creacion") val fechaCreacion: String = ""
+)
+
+data class TomaSupervisadaItemDto(
+    @SerializedName("id_recordatorio") val idRecordatorio: Int,
+    @SerializedName("nombre_medicamento") val nombreMedicamento: String,
+    val dosis: String,
+    @SerializedName("hora_programada") val horaProgramada: String,
+    val estado: String,
+    @SerializedName("es_critico") val esCritico: Boolean,
+    @SerializedName("veces_pospuesto") val vecesPospuesto: Int
+)
+
+data class CuidadorPanelResponseDto(
+    @SerializedName("id_paciente") val idPaciente: Int,
+    @SerializedName("nombre_paciente") val nombrePaciente: String,
+    @SerializedName("correo_paciente") val correoPaciente: String,
+    @SerializedName("fecha_nacimiento") val fechaNacimiento: String? = null,
+    @SerializedName("edad_paciente") val edadPaciente: Int = 68,
+    @SerializedName("es_adulto_mayor") val esAdultoMayor: Boolean = true,
+    @SerializedName("rango_edad") val rangoEdad: String = "adulto_mayor",
+    @SerializedName("adherencia_hoy_pct") val adherenciaHoyPct: Int = 0,
+    @SerializedName("tomas_completadas_hoy") val tomasCompletadasHoy: Int = 0,
+    @SerializedName("tomas_totales_hoy") val tomasTotalesHoy: Int = 0,
+    @SerializedName("tomas_omitidas_hoy") val tomasOmitidasHoy: Int = 0,
+    @SerializedName("tomas_criticas_omitidas_hoy") val tomasCriticasOmitidasHoy: Int = 0,
+    @SerializedName("alertas_activas") val alertasActivas: List<AlertaCuidadorDto> = emptyList(),
+    @SerializedName("tomas_hoy") val tomasHoy: List<TomaSupervisadaItemDto> = emptyList(),
+    @SerializedName("estado_riesgo") val estadoRiesgo: String = "estable"
+)

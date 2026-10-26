@@ -150,6 +150,30 @@ object ReminderAlarmScheduler {
         )
     }
 
+    /**
+     * Dispara inmediatamente la alarma nativa y la notificación con sonido y botones de acción.
+     */
+    fun triggerImmediateNativeAlarm(
+        context: Context,
+        idRecordatorio: Int,
+        nombreMedicamento: String,
+        dosisDetalle: String,
+        horaFormateada: String,
+        esCritico: Boolean = false,
+        permitePosponer: Boolean = true
+    ) {
+        val appContext = context.applicationContext
+        NotificationHelper.showReminderNotification(
+            context = appContext,
+            idRecordatorio = idRecordatorio,
+            nombreMedicamento = nombreMedicamento,
+            dosisDetalle = dosisDetalle,
+            horaFormateada = horaFormateada,
+            esCritico = esCritico,
+            permitePosponer = permitePosponer
+        )
+    }
+
     fun cancelAlarm(context: Context, idRecordatorio: Int) {
         val appContext = context.applicationContext
         val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager

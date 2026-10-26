@@ -58,6 +58,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
+import com.medreminder.ai.notifications.NotificationHelper
+import com.medreminder.ai.notifications.ReminderAlarmScheduler
 import com.medreminder.ai.notifications.TtsHelper
 import com.medreminder.ai.ui.components.DraggableMediCompanion
 import com.medreminder.ai.ui.components.MediAssistantDialog
@@ -220,6 +222,7 @@ fun HomeRoute(
     val isTtsSpeaking by TtsHelper.isSpeaking.collectAsState()
     val currentTtsKey by TtsHelper.currentKey.collectAsState()
     val currentTtsText by TtsHelper.currentText.collectAsState()
+    val activeAlarmEvent by NotificationHelper.activeAlarmEvent.collectAsState()
 
     val speakText: (String) -> Unit = { texto ->
         if (isTtsSpeaking) {
@@ -229,15 +232,63 @@ fun HomeRoute(
         }
     }
 
-    BackHandler(enabled = state.showEscaneoReceta) {
+    // Programar alarmas nativas exactas y publicar recordatorio activo en la barra de notificaciones
+    LaunchedEffect(state.tomasHoy) {
+        NotificationHelper.ensureChannelsCreated(context)
+        val pendientes = state.tomasHoy.filter { it.estado == "pendiente" }
+        pendientes.forEach { toma ->
+            ReminderAlarmScheduler.scheduleFromHoraFormateada(
+                context = context,
+                idRecordatorio = toma.idRecordatorio,
+                horaFormateada = toma.horaFormateada,
+                nombreMedicamento = toma.nombreMedicamento,
+                dosisDetalle = toma.dosisDetalle.substringBefore("•").trim(),
+                esCritico = toma.esCritico,
+                permitePosponer = toma.permitePosponer
+            )
+        }
+        val proxima = pendientes.firstOrNull()
+        if (proxima != null) {
+            NotificationHelper.showUpcomingSummaryNotification(
+                context = context,
+                pendientesCount = pendientes.size,
+                proximaMedNombre = proxima.nombreMedicamento,
+                proximaMedHora = proxima.horaFormateada,
+                proximaMedDosis = proxima.dosisDetalle.substringBefore("•").trim(),
+                esCritico = proxima.esCritico
+            )
+        }
+    }
+
+    // Disparar notificación nativa al cuidador cuando salta el modal de castigo/supervisión geriátrica
+    LaunchedEffect(state.seniorPenaltyModal) {
+        state.seniorPenaltyModal?.let { penalty ->
+            NotificationHelper.showCaregiverAlertNotification(
+                context = context,
+                titulo = if (penalty.isCriticalAutoSent) {
+                    "🚨 ALERTA CRÍTICA AUTOMÁTICA AL CUIDADOR"
+                } else {
+                    "⚠️ Aviso al Cuidador (${penalty.cuidadorNombre})"
+                },
+                mensaje = penalty.mensajeAlerta,
+                esCritico = penalty.isCriticalAutoSent
+            )
+        }
+    }
+
+    BackHandler(enabled = state.showVistaCuidador) {
+        viewModel.onCloseVistaCuidador()
+    }
+
+    BackHandler(enabled = !state.showVistaCuidador && state.showEscaneoReceta) {
         viewModel.onCloseEscaneoReceta()
     }
 
-    BackHandler(enabled = !state.showEscaneoReceta && state.showNuevoMedicamento) {
+    BackHandler(enabled = !state.showVistaCuidador && !state.showEscaneoReceta && state.showNuevoMedicamento) {
         viewModel.onCloseNuevoMedicamento()
     }
 
-    BackHandler(enabled = !state.showEscaneoReceta && !state.showNuevoMedicamento && state.selectedTab != HomeTab.HOY) {
+    BackHandler(enabled = !state.showVistaCuidador && !state.showEscaneoReceta && !state.showNuevoMedicamento && state.selectedTab != HomeTab.HOY) {
         viewModel.onSelectTab(HomeTab.HOY)
     }
 
@@ -246,6 +297,18 @@ fun HomeRoute(
             snackbarHostState.showSnackbar(msg)
             viewModel.onSnackbarShown()
         }
+    }
+
+    if (state.showVistaCuidador) {
+        CuidadorScreen(
+            state = state,
+            onBack = viewModel::onCloseVistaCuidador,
+            onRefresh = { viewModel.cargarPanelCuidador(silencioso = false) },
+            onAtenderAlerta = viewModel::onAtenderAlertaCuidador,
+            onSimularAlertaCritica = viewModel::onSimularAlertaCriticaCuidador,
+            onCambiarRangoEdadDemo = viewModel::onCambiarRangoEdadDemo
+        )
+        return
     }
 
     if (state.showEscaneoReceta) {
@@ -377,6 +440,8 @@ fun HomeRoute(
                         onRegistrarTomaClick = viewModel::onOpenConfirmacionToma,
                         onRevertirTomaClick = viewModel::onRevertirToma,
                         onNuevoMedClick = viewModel::onOpenNuevoMedicamento,
+                        onOpenVistaCuidador = viewModel::onOpenVistaCuidador,
+                        onCambiarRangoEdadDemo = viewModel::onCambiarRangoEdadDemo,
                         onToggleTextoGrande = {
                             val current = accessSettings.fontScaleMode
                             val next = when (current) {
@@ -415,7 +480,8 @@ fun HomeRoute(
                         onAgregarAlergia = viewModel::onAgregarAlergia,
                         onEliminarAlergia = viewModel::onEliminarAlergia,
                         onGuardarContacto = viewModel::onGuardarContacto,
-                        onEliminarContacto = viewModel::onEliminarContacto
+                        onEliminarContacto = viewModel::onEliminarContacto,
+                        onOpenVistaCuidador = viewModel::onOpenVistaCuidador
                     )
 
                     HomeTab.ANALISIS_DFS -> AnalisisDfsScreenContent(
@@ -509,6 +575,7 @@ fun HomeRoute(
         state.selectedTomaForModal?.let { toma ->
             ConfirmacionTomaModal(
                 toma = toma,
+                esAdultoMayor = state.esAdultoMayor,
                 contactosApoyo = state.contactosApoyo,
                 castigoPosponerBloqueado = state.castigoPosponerBloqueado,
                 isActionInFlight = state.isActionInFlight,
@@ -522,6 +589,49 @@ fun HomeRoute(
                     } else {
                         TtsHelper.speak(context, texto, key = "modal_confirmacion")
                     }
+                }
+            )
+        }
+
+        // Modal de Castigo / Alerta al Cuidador para Adulto Mayor (Normal vs Crítico Automático)
+        state.seniorPenaltyModal?.let { penalty ->
+            SeniorCaregiverPenaltyModal(
+                penalty = penalty,
+                onDismiss = viewModel::onDismissSeniorPenaltyModal,
+                onCorregirYTomarAhora = {
+                    viewModel.onTomarPorId(penalty.idRecordatorio, penalty.medicamentoNombre)
+                },
+                onAbrirVistaCuidador = viewModel::onOpenVistaCuidador
+            )
+        }
+
+        // Modal de Alarma Nativa de Medicamento (salta automáticamente cuando llega la hora de una toma)
+        activeAlarmEvent?.let { alarm ->
+            NativeMedicationAlarmModal(
+                alarmEvent = alarm,
+                esAdultoMayor = state.esAdultoMayor,
+                onTomarAhora = {
+                    NotificationHelper.dismissActiveAlarmEvent()
+                    NotificationHelper.cancelNotification(context, alarm.idRecordatorio)
+                    viewModel.onTomarPorId(alarm.idRecordatorio, alarm.nombreMedicamento)
+                },
+                onPosponer30Min = {
+                    NotificationHelper.dismissActiveAlarmEvent()
+                    ReminderAlarmScheduler.scheduleSnooze30Min(
+                        context = context,
+                        idRecordatorio = alarm.idRecordatorio,
+                        nombreMedicamento = alarm.nombreMedicamento,
+                        dosisDetalle = alarm.dosisDetalle,
+                        horaFormateada = alarm.horaFormateada
+                    )
+                    val matchingToma = state.tomasHoy.firstOrNull { it.idRecordatorio == alarm.idRecordatorio }
+                    if (matchingToma != null) {
+                        viewModel.onOpenConfirmacionToma(matchingToma)
+                        viewModel.onPosponer30Min()
+                    }
+                },
+                onDismiss = {
+                    NotificationHelper.dismissActiveAlarmEvent()
                 }
             )
         }
@@ -982,6 +1092,8 @@ private fun HoyScreenContent(
     onRegistrarTomaClick: (TomaHoyItemUi) -> Unit,
     onRevertirTomaClick: (Int) -> Unit,
     onNuevoMedClick: () -> Unit,
+    onOpenVistaCuidador: () -> Unit = {},
+    onCambiarRangoEdadDemo: (Boolean) -> Unit = {},
     onToggleTextoGrande: () -> Unit = {},
     onToggleAltoContraste: () -> Unit = {},
     onSpeakText: (String) -> Unit = {},
@@ -1016,9 +1128,9 @@ private fun HoyScreenContent(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Tarjeta Compacta y Elegante de Progreso Diario
+        // 1. Tarjeta de Progreso Diario + Modo Adaptativo por Edad (Racha/Honor vs Supervisión Adulto Mayor)
         item {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -1029,88 +1141,264 @@ private fun HoyScreenContent(
                     .fillMaxWidth()
                     .bounceClick()
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(TealPrimary)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = if (totalTomas == 0) "Sin dosis pendientes hoy" else "$completadas de $totalTomas tomas completadas",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = a11y.adaptiveTextPrimary
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        val progressFraction = if (totalTomas > 0) completadas.toFloat() / totalTomas else 0f
-                        val animProgress by animateFloatAsState(
-                            targetValue = progressFraction,
-                            animationSpec = tween(600, easing = FastOutSlowInEasing),
-                            label = "daily_prog"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.94f)
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(a11y.adaptiveSoftSurface)
-                        ) {
-                            val shimmerBrush = Brush.linearGradient(
-                                colors = listOf(
-                                    TealPrimary,
-                                    Color(0xFF2DD4BF),
-                                    Color(0xFF38BDF8),
-                                    TealPrimary
-                                ),
-                                start = Offset(shimmerOffset, 0f),
-                                end = Offset(shimmerOffset + 320f, 0f)
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(TealPrimary)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = if (totalTomas == 0) "Sin dosis pendientes hoy" else "$completadas de $totalTomas tomas completadas",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = a11y.adaptiveTextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            val progressFraction = if (totalTomas > 0) completadas.toFloat() / totalTomas else 0f
+                            val animProgress by animateFloatAsState(
+                                targetValue = progressFraction,
+                                animationSpec = tween(600, easing = FastOutSlowInEasing),
+                                label = "daily_prog"
                             )
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(fraction = animProgress)
-                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.94f)
+                                    .height(5.dp)
                                     .clip(RoundedCornerShape(50))
-                                    .background(shimmerBrush)
+                                    .background(a11y.adaptiveSoftSurface)
+                            ) {
+                                val shimmerBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        TealPrimary,
+                                        Color(0xFF2DD4BF),
+                                        Color(0xFF38BDF8),
+                                        TealPrimary
+                                    ),
+                                    start = Offset(shimmerOffset, 0f),
+                                    end = Offset(shimmerOffset + 320f, 0f)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction = animProgress)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(50))
+                                        .background(shimmerBrush)
+                                )
+                            }
+                        }
+
+                        // Dependiendo del rango de edad:
+                        // - Joven/Adulto (< 60 años): Muestra Racha de Fuego y Rango de Honor
+                        // - Adulto Mayor (>= 60 años): Muestra Insignia de Supervisión Geriátrica
+                        if (!state.esAdultoMayor) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = TealBadgeBg,
+                                modifier = Modifier
+                                    .padding(start = 10.dp)
+                                    .graphicsLayer {
+                                        scaleX = flamePulse
+                                        scaleY = flamePulse
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LocalFireDepartment,
+                                        contentDescription = null,
+                                        tint = TealPrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "${state.rachaDias} d • ${state.rangoHonor}",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = TealDark
+                                    )
+                                }
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFFFFF3E0),
+                                border = BorderStroke(1.dp, Color(0xFFFFB74D)),
+                                modifier = Modifier.padding(start = 10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.HealthAndSafety,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE65100),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "${state.edadUsuario}a • Supervisión",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFE65100)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Si es Joven/Adulto (<60 años), mostramos su barra de Rango de Honor y Escudos
+                    if (!state.esAdultoMayor) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.EmojiEvents,
+                                    contentDescription = null,
+                                    tint = if (state.castigoActivo) AlertRedText else TealPrimary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    text = if (state.castigoActivo) {
+                                        "Honor ${state.rangoHonor} Penalizado (${state.puntosXp} XP)"
+                                    } else {
+                                        "Honor ${state.rangoHonor} (${state.puntosXp} XP) • ${state.escudosRacha} Escudos"
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (state.castigoActivo) AlertRedText else a11y.adaptiveTextSecondary
+                                )
+                            }
+                            Text(
+                                text = "Modo Joven/Adulto (${state.edadUsuario}a)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TealPrimary
                             )
                         }
                     }
 
-                    // Racha compacta
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = TealBadgeBg,
-                        modifier = Modifier
-                            .padding(start = 10.dp)
-                            .graphicsLayer {
-                                scaleX = flamePulse
-                                scaleY = flamePulse
-                            }
+                    Spacer(Modifier.height(10.dp))
+
+                    // Barra de Acciones Rápidas: Vista Cuidador + Alarma Nativa + Selector Rango de Edad
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // Botón Vista Cuidador
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (a11y.isDarkTheme) Color(0xFF1B2B32) else TealSoftBg,
+                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onOpenVistaCuidador() }
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocalFireDepartment,
-                                contentDescription = null,
-                                tint = TealPrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.HealthAndSafety,
+                                    contentDescription = null,
+                                    tint = TealDark,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Vista Cuidador",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TealDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // Botón Probar Alarma Nativa
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (a11y.isDarkTheme) Color(0xFF1E293B) else Color(0xFFE0F2FE),
+                            border = BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    val primera = state.tomasHoy.firstOrNull { it.estado == "pendiente" }
+                                        ?: state.tomasHoy.firstOrNull()
+                                    ReminderAlarmScheduler.triggerImmediateNativeAlarm(
+                                        context = context,
+                                        idRecordatorio = primera?.idRecordatorio ?: 777,
+                                        nombreMedicamento = primera?.nombreMedicamento ?: "Losartán Potásico",
+                                        dosisDetalle = primera?.dosisDetalle?.substringBefore("•")?.trim() ?: "50 mg",
+                                        horaFormateada = primera?.horaFormateada ?: "Ahora",
+                                        esCritico = primera?.esCritico ?: false,
+                                        permitePosponer = primera?.permitePosponer ?: true
+                                    )
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AccessAlarm,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0369A1),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Alarma Nativa",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF0369A1),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // Alternar Rango de Edad (Adulto Mayor 69a vs Joven 28a)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (state.esAdultoMayor) Color(0xFFFFF8E1) else TealBadgeBg,
+                            border = BorderStroke(
+                                1.dp,
+                                if (state.esAdultoMayor) Color(0xFFFFB300) else TealPrimary
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onCambiarRangoEdadDemo(!state.esAdultoMayor) }
+                        ) {
                             Text(
-                                text = "${state.rachaDias} d",
-                                fontSize = 12.sp,
+                                text = if (state.esAdultoMayor) "Edad: 69a ⇄" else "Edad: 28a ⇄",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = TealDark
+                                color = if (state.esAdultoMayor) Color(0xFFE65100) else TealDark,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp)
                             )
                         }
                     }
@@ -2370,6 +2658,7 @@ fun SwipeToConfirmTrack(
 @Composable
 fun ConfirmacionTomaModal(
     toma: TomaHoyItemUi,
+    esAdultoMayor: Boolean = true,
     contactosApoyo: List<ContactoApoyoDto> = emptyList(),
     castigoPosponerBloqueado: Boolean = false,
     isActionInFlight: Boolean,
@@ -2867,8 +3156,12 @@ fun ConfirmacionTomaModal(
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = "Posponer 30 min (${toma.vecesPospuesto}/2)",
-                                    fontSize = 15.5.sp,
+                                    text = if (esAdultoMayor) {
+                                        "Posponer 30 min (Notifica al Cuidador)"
+                                    } else {
+                                        "Posponer 30 min (${toma.vecesPospuesto}/2)"
+                                    },
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TealPrimary
                                 )
@@ -2877,7 +3170,7 @@ fun ConfirmacionTomaModal(
 
                         Spacer(Modifier.height(6.dp))
 
-                        // 3. Omisión: PROHIBIDA para medicamentos críticos; disponible solo para medicamentos normales
+                        // 3. Omisión: Si es crítico y se omite/no se toma, envía automáticamente la alerta crítica al cuidador
                         if (toma.esCritico) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
@@ -2887,30 +3180,51 @@ fun ConfirmacionTomaModal(
                                     .fillMaxWidth()
                                     .padding(top = 8.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Lock,
-                                        contentDescription = null,
-                                        tint = Color(0xFFC62828),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = "Dosis Crítica Vital Obligatoria",
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFFC62828)
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Lock,
+                                            contentDescription = null,
+                                            tint = Color(0xFFC62828),
+                                            modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(Modifier.height(2.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Dosis Crítica Vital Obligatoria",
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFFC62828)
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = "Por ser un medicamento crítico, si lo omites se enviará AUTOMÁTICAMENTE una alerta urgente a tu cuidador.",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFFB71C1C),
+                                                lineHeight = 16.sp
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(10.dp))
+                                    OutlinedButton(
+                                        onClick = onOmitirToma,
+                                        enabled = !isActionInFlight,
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(1.2.dp, Color(0xFFC62828)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.NotificationImportant,
+                                            contentDescription = null,
+                                            tint = Color(0xFFC62828),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = "Este medicamento no permite posponerse ni omitirse. Debe registrarse como tomado por tu seguridad médica.",
+                                            text = "No puedo tomarla (Enviar Alerta Automática al Cuidador)",
                                             fontSize = 12.sp,
-                                            color = Color(0xFFB71C1C),
-                                            lineHeight = 16.sp
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFC62828)
                                         )
                                     }
                                 }
@@ -2931,8 +3245,12 @@ fun ConfirmacionTomaModal(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "Omitir Toma (-40 XP)",
-                                    fontSize = 15.sp,
+                                    text = if (esAdultoMayor) {
+                                        "Omitir Toma (Enviará Alerta a tu Cuidador)"
+                                    } else {
+                                        "Omitir Toma (-45 XP • Penaliza Honor)"
+                                    },
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = OmitBrownText
                                 )

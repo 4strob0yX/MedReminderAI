@@ -11,7 +11,14 @@ data class LoginRequest(
 data class RegisterRequest(
     val nombre: String,
     val email: String,
-    val password: String
+    val password: String,
+    @SerializedName("fecha_nacimiento") val fechaNacimiento: String? = null,
+    val rol: String = "paciente"
+)
+
+data class UpdatePerfilEdadRequestDto(
+    @SerializedName("fecha_nacimiento") val fechaNacimiento: String,
+    val rol: String? = null
 )
 
 data class RefreshRequest(
@@ -31,7 +38,12 @@ data class ResetPasswordResponse(
 data class UsuarioDto(
     @SerializedName("id_usuario") val idUsuario: Int,
     @SerializedName(value = "nombre_completo", alternate = ["nombre"]) val nombre: String? = null,
-    @SerializedName(value = "correo", alternate = ["email"]) val email: String? = null
+    @SerializedName(value = "correo", alternate = ["email"]) val email: String? = null,
+    @SerializedName("fecha_nacimiento") val fechaNacimiento: String? = null,
+    val rol: String? = "paciente",
+    val edad: Int = 68,
+    @SerializedName("es_adulto_mayor") val esAdultoMayor: Boolean = true,
+    @SerializedName("rango_edad") val rangoEdad: String = "adulto_mayor"
 )
 
 data class TokenResponse(

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.medreminder.ai.data.remote.AiChatResponseDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
+import com.medreminder.ai.data.remote.CuidadorPanelResponseDto
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.data.remote.MedicamentoCreateDto
 import com.medreminder.ai.data.remote.MedicamentoDto
@@ -148,11 +149,23 @@ data class EditablePrescriptionItem(
     val alertaInteraccion: String? = null
 )
 
+data class SeniorPenaltyModalState(
+    val isCriticalAutoSent: Boolean,
+    val idRecordatorio: Int,
+    val medicamentoNombre: String,
+    val dosisDetalle: String,
+    val accionIntentada: String, // "omitir" o "posponer"
+    val cuidadorNombre: String,
+    val cuidadorTelefono: String,
+    val mensajeAlerta: String
+)
+
 data class HomeUiState(
     val mediReaction: MediReaction? = null,
     val selectedTab: HomeTab = HomeTab.HOY,
     val showNuevoMedicamento: Boolean = false,
     val showEscaneoReceta: Boolean = false,
+    val showVistaCuidador: Boolean = false,
     val analizandoRecetaIa: Boolean = false,
     val guardandoRecetaMasiva: Boolean = false,
     val medicoRecetaDetectado: String = "Médico Tratante",
@@ -160,7 +173,15 @@ data class HomeUiState(
     val modeloRecetaUsado: String = "medi-clinico",
     val itemsRecetaEditables: List<EditablePrescriptionItem> = emptyList(),
     val selectedTomaForModal: TomaHoyItemUi? = null,
+    val seniorPenaltyModal: SeniorPenaltyModalState? = null,
+    val cuidadorPanel: CuidadorPanelResponseDto? = null,
+    val cargandoPanelCuidador: Boolean = false,
     val nombreUsuario: String = "Paciente",
+    val fechaNacimiento: String = "1957-05-14",
+    val edadUsuario: Int = 68,
+    val esAdultoMayor: Boolean = true,
+    val rangoEdad: String = "adulto_mayor",
+    val rolUsuario: String = "paciente",
     val fechaEncabezado: String = "",
     val tomasHoy: List<TomaHoyItemUi> = emptyList(),
     val tomasCompletadasCount: Int = 0,
@@ -277,7 +298,12 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
-                            snackbarMessage = "+25 XP • Toma registrada: ${toma.nombreMedicamento}",
+                            seniorPenaltyModal = null,
+                            snackbarMessage = if (it.esAdultoMayor) {
+                                "✓ Toma registrada a tiempo: ${toma.nombreMedicamento}"
+                            } else {
+                                "+25 XP • Toma registrada: ${toma.nombreMedicamento}"
+                            },
                             mediReaction = nextReaction(it, MediReactionKind.TAKEN)
                         )
                     }
@@ -295,11 +321,100 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
+    fun onTomarPorId(idRecordatorio: Int, nombreMedicamento: String) {
+        if (_state.value.isActionInFlight) return
+        _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
+        viewModelScope.launch {
+            val res = repository.tomarRecordatorio(idRecordatorio)
+            res.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            isActionInFlight = false,
+                            selectedTomaForModal = null,
+                            seniorPenaltyModal = null,
+                            snackbarMessage = "✓ Toma confirmada: $nombreMedicamento",
+                            mediReaction = nextReaction(it, MediReactionKind.TAKEN)
+                        )
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            isActionInFlight = false,
+                            snackbarMessage = err.message ?: "No se pudo registrar la toma"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onDismissSeniorPenaltyModal() {
+        _state.update { it.copy(seniorPenaltyModal = null) }
+    }
+
+    /**
+     * Cuando un adulto mayor (o cualquier paciente con supervisión) intenta omitir o no puede tomar
+     * un medicamento CRÍTICO: se envía AUTOMÁTICAMENTE la alerta crítica al cuidador y se muestra el modal rojo.
+     */
+    fun onOmitirCriticoConAlertaAutomatica() {
+        val toma = _state.value.selectedTomaForModal ?: return
+        if (_state.value.isActionInFlight) return
+
+        val cuidador = _state.value.contactosApoyo.firstOrNull { it.esPrincipal }
+            ?: _state.value.contactosApoyo.firstOrNull()
+        val nombreCuidador = cuidador?.nombreCompleto ?: "Familiar / Cuidador Principal"
+        val telCuidador = cuidador?.telefono ?: ""
+        val dosisLimpia = toma.dosisDetalle.substringBefore("•").trim()
+        val msgCritico = "ALERTA CRÍTICA AUTOMÁTICA: ${_state.value.nombreUsuario} (${_state.value.edadUsuario} años) " +
+            "no tomó su medicamento CRÍTICO ${toma.nombreMedicamento} ($dosisLimpia) de las ${toma.horaFormateada}. " +
+            "Se ha enviado notificación urgente a $nombreCuidador."
+
+        _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
+        viewModelScope.launch {
+            // 1. Registrar omisión en backend (que también registra la alerta crítica en BD)
+            runCatching { repository.omitirRecordatorio(toma.idRecordatorio) }
+            // 2. Disparar explícitamente alerta crítica automática al panel del cuidador
+            runCatching {
+                repository.dispararAlertaCuidador(
+                    tipoAlerta = "critica_automatica",
+                    medicamentoNombre = toma.nombreMedicamento,
+                    dosis = dosisLimpia,
+                    accion = "omitir",
+                    esCritico = true,
+                    mensaje = msgCritico
+                )
+            }
+            _state.update {
+                it.copy(
+                    isActionInFlight = false,
+                    selectedTomaForModal = null,
+                    seniorPenaltyModal = SeniorPenaltyModalState(
+                        isCriticalAutoSent = true,
+                        idRecordatorio = toma.idRecordatorio,
+                        medicamentoNombre = toma.nombreMedicamento,
+                        dosisDetalle = dosisLimpia,
+                        accionIntentada = "omitir",
+                        cuidadorNombre = nombreCuidador,
+                        cuidadorTelefono = telCuidador,
+                        mensajeAlerta = msgCritico
+                    ),
+                    snackbarMessage = "🚨 Alerta crítica enviada automáticamente a $nombreCuidador",
+                    mediReaction = nextReaction(it, MediReactionKind.SKIPPED)
+                )
+            }
+            cargarDatos(silencioso = true)
+            cargarPanelCuidador(silencioso = true)
+        }
+    }
+
     fun onPosponer30Min() {
         val toma = _state.value.selectedTomaForModal ?: return
         if (_state.value.isActionInFlight) return
 
-        if (_state.value.castigoPosponerBloqueado) {
+        if (!_state.value.esAdultoMayor && _state.value.castigoPosponerBloqueado) {
             _state.update {
                 it.copy(snackbarMessage = "Posponer bloqueado por bajo Honor. Cumple tus tomas a tiempo para desbloquearlo.")
             }
@@ -307,26 +422,55 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
 
         if (!toma.permitePosponer || toma.esCritico) {
+            if (_state.value.esAdultoMayor && toma.esCritico) {
+                onOmitirCriticoConAlertaAutomatica()
+                return
+            }
             _state.update {
                 it.copy(snackbarMessage = "Este medicamento es crítico y NO puede posponerse.")
             }
             return
         }
 
+        val esSenior = _state.value.esAdultoMayor
+        val cuidador = _state.value.contactosApoyo.firstOrNull { it.esPrincipal }
+            ?: _state.value.contactosApoyo.firstOrNull()
+        val nombreCuidador = cuidador?.nombreCompleto ?: "Familiar / Cuidador Principal"
+        val telCuidador = cuidador?.telefono ?: ""
+        val dosisLimpia = toma.dosisDetalle.substringBefore("•").trim()
+
         _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
         viewModelScope.launch {
             val res = repository.posponerRecordatorio(toma.idRecordatorio)
             res.fold(
                 onSuccess = { updatedDto ->
-                    val msg = if (updatedDto.estado == "omitido") {
+                    val msg = if (esSenior) {
+                        "Aviso: Se registró posposición de ${toma.nombreMedicamento}. Se notificará a $nombreCuidador."
+                    } else if (updatedDto.estado == "omitido") {
                         "Límite de posposiciones alcanzado: marcado como omitido (-45 XP)"
                     } else {
                         "Pospuesto 30 minutos (${updatedDto.vecesPospuesto}/2)"
                     }
+
+                    val penaltyModal = if (esSenior) {
+                        SeniorPenaltyModalState(
+                            isCriticalAutoSent = false,
+                            idRecordatorio = toma.idRecordatorio,
+                            medicamentoNombre = toma.nombreMedicamento,
+                            dosisDetalle = dosisLimpia,
+                            accionIntentada = if (updatedDto.estado == "omitido") "omitir" else "posponer",
+                            cuidadorNombre = nombreCuidador,
+                            cuidadorTelefono = telCuidador,
+                            mensajeAlerta = "Atención ${_state.value.nombreUsuario}: Has pospuesto tu medicamento ${toma.nombreMedicamento} ($dosisLimpia). " +
+                                "Por protocolo de cuidado para adulto mayor, se notificará a tu cuidador ($nombreCuidador) sobre este retraso."
+                        )
+                    } else null
+
                     _state.update {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
+                            seniorPenaltyModal = penaltyModal,
                             snackbarMessage = msg,
                             mediReaction = nextReaction(
                                 it,
@@ -335,6 +479,7 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         )
                     }
                     cargarDatos(silencioso = true)
+                    if (esSenior) cargarPanelCuidador(silencioso = true)
                 },
                 onFailure = { err ->
                     _state.update {
@@ -352,20 +497,53 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         val toma = _state.value.selectedTomaForModal ?: return
         if (_state.value.isActionInFlight) return
 
+        // Si el medicamento es crítico, dispara la alerta crítica automática al cuidador
+        if (toma.esCritico) {
+            onOmitirCriticoConAlertaAutomatica()
+            return
+        }
+
+        val esSenior = _state.value.esAdultoMayor
+        val cuidador = _state.value.contactosApoyo.firstOrNull { it.esPrincipal }
+            ?: _state.value.contactosApoyo.firstOrNull()
+        val nombreCuidador = cuidador?.nombreCompleto ?: "Familiar / Cuidador Principal"
+        val telCuidador = cuidador?.telefono ?: ""
+        val dosisLimpia = toma.dosisDetalle.substringBefore("•").trim()
+
         _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
         viewModelScope.launch {
             val res = repository.omitirRecordatorio(toma.idRecordatorio)
             res.fold(
                 onSuccess = {
+                    val penaltyModal = if (esSenior) {
+                        SeniorPenaltyModalState(
+                            isCriticalAutoSent = false,
+                            idRecordatorio = toma.idRecordatorio,
+                            medicamentoNombre = toma.nombreMedicamento,
+                            dosisDetalle = dosisLimpia,
+                            accionIntentada = "omitir",
+                            cuidadorNombre = nombreCuidador,
+                            cuidadorTelefono = telCuidador,
+                            mensajeAlerta = "Atención ${_state.value.nombreUsuario}: Omitiste tu medicamento normal ${toma.nombreMedicamento} ($dosisLimpia). " +
+                                "Se notificará a tu cuidador ($nombreCuidador) para que esté al tanto de tu tratamiento."
+                        )
+                    } else null
+
                     _state.update {
                         it.copy(
                             isActionInFlight = false,
                             selectedTomaForModal = null,
-                            snackbarMessage = "Toma omitida (-45 XP • Honor penalizado)",
+                            seniorPenaltyModal = penaltyModal,
+                            snackbarMessage = if (esSenior) {
+                                "⚠️ Toma omitida: se notificará a tu cuidador ($nombreCuidador)"
+                            } else {
+                                "Toma omitida (-45 XP • Honor penalizado)"
+                            },
                             mediReaction = nextReaction(it, MediReactionKind.SKIPPED)
                         )
                     }
                     cargarDatos(silencioso = true)
+                    if (esSenior) cargarPanelCuidador(silencioso = true)
                 },
                 onFailure = { err ->
                     _state.update {
@@ -1097,6 +1275,144 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
+    // --- Vista del Cuidador y Cambio de Rango Etario en Vivo ---
+
+    fun onOpenVistaCuidador() {
+        _state.update { it.copy(showVistaCuidador = true) }
+        cargarPanelCuidador(silencioso = false)
+    }
+
+    fun onCloseVistaCuidador() {
+        _state.update { it.copy(showVistaCuidador = false) }
+    }
+
+    fun cargarPanelCuidador(silencioso: Boolean = true) {
+        if (!silencioso) {
+            _state.update { it.copy(cargandoPanelCuidador = true) }
+        }
+        viewModelScope.launch {
+            val zoneLocal = ZoneId.systemDefault()
+            val tzOffsetMinutes = zoneLocal.rules.getOffset(Instant.now()).totalSeconds / 60
+            val res = repository.obtenerPanelCuidador(tzOffsetMinutes = tzOffsetMinutes)
+            res.fold(
+                onSuccess = { panel ->
+                    _state.update {
+                        it.copy(
+                            cargandoPanelCuidador = false,
+                            cuidadorPanel = panel
+                        )
+                    }
+                },
+                onFailure = {
+                    _state.update { it.copy(cargandoPanelCuidador = false) }
+                }
+            )
+        }
+    }
+
+    fun onAtenderAlertaCuidador(idAlerta: Int) {
+        viewModelScope.launch {
+            val res = repository.marcarAlertaCuidadorAtendida(idAlerta)
+            res.fold(
+                onSuccess = {
+                    _state.update { it.copy(snackbarMessage = "✓ Alerta marcada como atendida por el cuidador") }
+                    cargarPanelCuidador(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(snackbarMessage = err.message ?: "No se pudo actualizar la alerta") }
+                }
+            )
+        }
+    }
+
+    fun onSimularAlertaCriticaCuidador() {
+        val medCritico = _state.value.tomasHoy.firstOrNull { it.esCritico }
+            ?: _state.value.tomasHoy.firstOrNull()
+        val nombreMed = medCritico?.nombreMedicamento ?: "Insulina Glargina / Losartán"
+        val dosisMed = medCritico?.dosisDetalle?.substringBefore("•")?.trim() ?: "50 mg"
+        val cuidador = _state.value.contactosApoyo.firstOrNull { it.esPrincipal }
+            ?: _state.value.contactosApoyo.firstOrNull()
+        val nombreCuidador = cuidador?.nombreCompleto ?: "Cuidador Principal"
+        val telCuidador = cuidador?.telefono ?: ""
+        val mensaje = "ALERTA CRÍTICA AUTOMÁTICA: ${_state.value.nombreUsuario} (${_state.value.edadUsuario} años) " +
+            "omitió la toma crítica de $nombreMed ($dosisMed). Se requiere verificación inmediata por parte de $nombreCuidador."
+
+        viewModelScope.launch {
+            val res = repository.dispararAlertaCuidador(
+                tipoAlerta = "critica_automatica",
+                medicamentoNombre = nombreMed,
+                dosis = dosisMed,
+                accion = "omitir",
+                esCritico = true,
+                mensaje = mensaje
+            )
+            res.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            seniorPenaltyModal = SeniorPenaltyModalState(
+                                isCriticalAutoSent = true,
+                                idRecordatorio = medCritico?.idRecordatorio ?: 0,
+                                medicamentoNombre = nombreMed,
+                                dosisDetalle = dosisMed,
+                                accionIntentada = "omitir",
+                                cuidadorNombre = nombreCuidador,
+                                cuidadorTelefono = telCuidador,
+                                mensajeAlerta = mensaje
+                            ),
+                            snackbarMessage = "🚨 Alerta crítica enviada automáticamente al cuidador"
+                        )
+                    }
+                    cargarPanelCuidador(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(snackbarMessage = err.message ?: "Error al enviar alerta") }
+                }
+            )
+        }
+    }
+
+    fun onCambiarRangoEdadDemo(esAdultoMayorTarget: Boolean) {
+        val nuevaFecha = if (esAdultoMayorTarget) "1957-05-14" else "1998-08-20"
+        viewModelScope.launch {
+            val res = repository.actualizarPerfilEdad(fechaNacimiento = nuevaFecha)
+            res.fold(
+                onSuccess = { perfilActualizado ->
+                    _state.update {
+                        it.copy(
+                            fechaNacimiento = perfilActualizado.fechaNacimiento ?: nuevaFecha,
+                            edadUsuario = perfilActualizado.edad,
+                            esAdultoMayor = perfilActualizado.esAdultoMayor,
+                            rangoEdad = perfilActualizado.rangoEdad,
+                            snackbarMessage = if (perfilActualizado.esAdultoMayor) {
+                                "Perfil actualizado: Adulto Mayor (${perfilActualizado.edad} años) • Supervisión de Cuidador Activa"
+                            } else {
+                                "Perfil actualizado: Joven/Adulto (${perfilActualizado.edad} años) • Racha y Penalización de Honor Activos"
+                            }
+                        )
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = {
+                    // Fallback local inmediato
+                    _state.update {
+                        it.copy(
+                            fechaNacimiento = nuevaFecha,
+                            edadUsuario = if (esAdultoMayorTarget) 69 else 28,
+                            esAdultoMayor = esAdultoMayorTarget,
+                            rangoEdad = if (esAdultoMayorTarget) "adulto_mayor" else "joven",
+                            snackbarMessage = if (esAdultoMayorTarget) {
+                                "Modo Adulto Mayor (69 años) activado"
+                            } else {
+                                "Modo Joven/Adulto (28 años • Racha y Honor) activado"
+                            }
+                        )
+                    }
+                }
+            )
+        }
+    }
+
     // --- Carga y mapeo de datos desde el Backend ---
 
     fun cargarDatos(silencioso: Boolean = false) {
@@ -1156,10 +1472,22 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     val escudosDisp = if (omitidas > 0) 1 else 2
                     val castigoActivo = omitidas > 0 || xpActual < 200
 
+                    val perfil = bundle.perfil
+                    val edadActual = perfil?.edad ?: _state.value.edadUsuario
+                    val esSenior = perfil?.esAdultoMayor ?: (edadActual >= 60)
+                    val rangoActual = perfil?.rangoEdad ?: if (esSenior) "adulto_mayor" else "joven"
+                    val fechaNac = perfil?.fechaNacimiento ?: _state.value.fechaNacimiento
+                    val rolActual = perfil?.rol ?: _state.value.rolUsuario
+
                     _state.update { prev ->
                         prev.copy(
                             isLoading = false,
                             nombreUsuario = bundle.nombreUsuario?.takeIf { it.isNotBlank() } ?: prev.nombreUsuario,
+                            fechaNacimiento = fechaNac,
+                            edadUsuario = edadActual,
+                            esAdultoMayor = esSenior,
+                            rangoEdad = rangoActual,
+                            rolUsuario = rolActual,
                             fechaEncabezado = buildFechaHoyEsp(),
                             tomasHoy = tomasUi,
                             tomasCompletadasCount = completadas,
@@ -1179,6 +1507,7 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                             contactosApoyo = bundle.contactosApoyo
                         )
                     }
+                    cargarPanelCuidador(silencioso = true)
                 },
                 onFailure = { err ->
                     _state.update {

@@ -46,10 +46,16 @@ def register(db: Session, data: RegisterRequest) -> TokenResponse:
     if db.scalar(select(Usuario.id_usuario).where(Usuario.correo == correo)):
         raise EmailAlreadyRegistered()
 
+    rol_clean = (data.rol or "paciente").strip().lower()
+    if rol_clean not in ("paciente", "cuidador"):
+        rol_clean = "paciente"
+
     user = Usuario(
         nombre_completo=data.nombre,
         correo=correo,
         password_hash=hash_password(data.password),
+        fecha_nacimiento=data.fecha_nacimiento,
+        rol=rol_clean,
     )
     db.add(user)
     try:

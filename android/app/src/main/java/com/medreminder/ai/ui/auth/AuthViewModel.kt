@@ -17,10 +17,13 @@ data class AuthUiState(
     val nombre: String = "",
     val email: String = "",
     val password: String = "",
+    val fechaNacimiento: String = "1957-05-14",
+    val rol: String = "paciente",
     val passwordVisible: Boolean = false,
     val nombreError: String? = null,
     val emailError: String? = null,
     val passwordError: String? = null,
+    val fechaNacimientoError: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val isAuthenticated: Boolean = false,
@@ -41,6 +44,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun onNombreChange(v: String) = _state.update { it.copy(nombre = v, nombreError = null, errorMessage = null) }
     fun onEmailChange(v: String) = _state.update { it.copy(email = v.trim(), emailError = null, errorMessage = null) }
     fun onPasswordChange(v: String) = _state.update { it.copy(password = v, passwordError = null, errorMessage = null) }
+    fun onFechaNacimientoChange(v: String) = _state.update { it.copy(fechaNacimiento = v.trim(), fechaNacimientoError = null, errorMessage = null) }
+    fun onRolChange(v: String) = _state.update { it.copy(rol = v) }
     fun onTogglePasswordVisibility() = _state.update { it.copy(passwordVisible = !it.passwordVisible) }
     fun onErrorShown() = _state.update { it.copy(errorMessage = null) }
 
@@ -124,7 +129,13 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         viewModelScope.launch {
             val result = when (s.mode) {
                 AuthMode.LOGIN -> repository.login(s.email, s.password)
-                AuthMode.REGISTER -> repository.register(s.nombre.trim(), s.email, s.password)
+                AuthMode.REGISTER -> repository.register(
+                    nombre = s.nombre.trim(),
+                    email = s.email,
+                    password = s.password,
+                    fechaNacimiento = s.fechaNacimiento,
+                    rol = s.rol
+                )
             }
             _state.update {
                 result.fold(
@@ -143,8 +154,18 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
             s.mode == AuthMode.REGISTER && s.password.length < 8 -> "Mínimo 8 caracteres"
             else -> null
         }
-        _state.update { it.copy(nombreError = nombreErr, emailError = emailErr, passwordError = passErr) }
-        return nombreErr == null && emailErr == null && passErr == null
+        val fechaErr = if (s.mode == AuthMode.REGISTER && !s.fechaNacimiento.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+            "Formato requerido: YYYY-MM-DD"
+        } else null
+        _state.update {
+            it.copy(
+                nombreError = nombreErr,
+                emailError = emailErr,
+                passwordError = passErr,
+                fechaNacimientoError = fechaErr
+            )
+        }
+        return nombreErr == null && emailErr == null && passErr == null && fechaErr == null
     }
 
     class Factory(private val repository: AuthRepository) : ViewModelProvider.Factory {

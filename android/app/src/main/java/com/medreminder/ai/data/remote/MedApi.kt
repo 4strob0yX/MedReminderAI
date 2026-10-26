@@ -15,6 +15,21 @@ interface MedApi {
     @GET("auth/me")
     suspend fun obtenerPerfil(): UsuarioDto
 
+    @PATCH("auth/me/edad")
+    suspend fun actualizarPerfilEdad(@Body body: UpdatePerfilEdadRequestDto): UsuarioDto
+
+    // --- Vista del Cuidador y Alertas Geriátricas ---
+    @GET("cuidador/panel")
+    suspend fun obtenerPanelCuidador(
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): CuidadorPanelResponseDto
+
+    @POST("cuidador/alertas")
+    suspend fun dispararAlertaCuidador(@Body body: AlertaCuidadorCreateDto): AlertaCuidadorDto
+
+    @PATCH("cuidador/alertas/{id}/atender")
+    suspend fun marcarAlertaCuidadorAtendida(@Path("id") idAlerta: Int): AlertaCuidadorDto
+
     @POST("medicamentos")
     suspend fun crearMedicamento(@Body body: MedicamentoCreateDto): MedicamentoDto
 

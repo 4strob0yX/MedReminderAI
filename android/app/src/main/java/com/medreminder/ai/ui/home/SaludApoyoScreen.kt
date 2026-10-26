@@ -89,7 +89,8 @@ fun SaludApoyoScreenContent(
     onAgregarAlergia: (String, String, String?) -> Unit,
     onEliminarAlergia: (Int) -> Unit,
     onGuardarContacto: (Int?, String, String, String, String?, Boolean) -> Unit,
-    onEliminarContacto: (Int) -> Unit
+    onEliminarContacto: (Int) -> Unit,
+    onOpenVistaCuidador: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val a11y = LocalAccessibilitySettings.current
@@ -101,7 +102,7 @@ fun SaludApoyoScreenContent(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Encabezado
+        // Encabezado + Acceso directo a Vista del Cuidador
         item {
             Surface(
                 shape = RoundedCornerShape(18.dp),
@@ -142,18 +143,41 @@ fun SaludApoyoScreenContent(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Alergias y Contacto de Apoyo",
+                        text = "Alergias, Apoyo y Vista del Cuidador",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = a11y.adaptiveTextPrimary
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
-                        text = "Validación cruzada de alergias y enlace rápido con tu red de cuidadores ante dosis críticas.",
+                        text = "Validación cruzada de alergias y supervisión en tiempo real para el cuidador ante omisiones o dosis críticas.",
                         fontSize = 12.5.sp,
                         color = a11y.adaptiveTextSecondary,
                         lineHeight = 17.sp
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onOpenVistaCuidador,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Shield,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Abrir Vista del Cuidador y Alertas en Vivo",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }

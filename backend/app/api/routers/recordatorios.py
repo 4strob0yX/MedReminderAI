@@ -11,7 +11,9 @@ from app.models.medicamento import Medicamento
 from app.models.recordatorio import HistorialToma, Recordatorio
 from app.models.tratamiento import Tratamiento
 from app.models.usuario import Usuario
+from app.schemas.auth import UsuarioOut
 from app.schemas.recordatorio import EstadisticasOut, RecordatorioOut
+from app.api.routers.cuidador import registrar_alerta_cuidador_db
 from app.services.recordatorio_service import (
     asegurar_horizonte_recordatorios,
     calcular_estadisticas_usuario,
@@ -185,15 +187,34 @@ def omitir(
     rec, med = _recordatorio_propio(db, user, id_recordatorio)
 
     if med.es_critico:
+        registrar_alerta_cuidador_db(
+            db=db,
+            user=user,
+            tipo_alerta="critica_automatica",
+            accion_origen="omitir",
+            nombre_medicamento=med.nombre,
+            dosis=med.dosis,
+            es_critico=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"El medicamento '{med.nombre}' es de dosis crítica: está estrictamente prohibido omitirlo o posponerlo. Debe registrarse como tomado.",
+            detail=f"🚨 Alerta enviada automáticamente a tu cuidador: El medicamento '{med.nombre}' es crítico y no debe omitirse.",
         )
 
     rec.estado = "omitido"
     _log(db, rec, "omitido")
     db.commit()
     db.refresh(rec)
+    if UsuarioOut.model_validate(user).es_adulto_mayor:
+        registrar_alerta_cuidador_db(
+            db=db,
+            user=user,
+            tipo_alerta="advertencia_normal",
+            accion_origen="omitir",
+            nombre_medicamento=med.nombre,
+            dosis=med.dosis,
+            es_critico=False,
+        )
     registrar_evento_mongo(
         evento="toma_omitida",
         id_usuario=user.id_usuario,
@@ -228,9 +249,18 @@ def posponer(
 
     # 1. Validar si el medicamento es crítico o tiene prohibido posponerse
     if not med.permite_posponer or med.es_critico:
+        registrar_alerta_cuidador_db(
+            db=db,
+            user=user,
+            tipo_alerta="critica_automatica",
+            accion_origen="posponer",
+            nombre_medicamento=med.nombre,
+            dosis=med.dosis,
+            es_critico=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"El medicamento '{med.nombre}' es de dosis crítica y NO puede posponerse.",
+            detail=f"🚨 Alerta enviada automáticamente a tu cuidador: El medicamento '{med.nombre}' es crítico y NO puede posponerse.",
         )
 
     # 2. Validar si el usuario tiene bloqueado el botón Posponer por Modo Castigo (bajo Honor)
@@ -264,6 +294,16 @@ def posponer(
 
     db.commit()
     db.refresh(rec)
+    if UsuarioOut.model_validate(user).es_adulto_mayor:
+        registrar_alerta_cuidador_db(
+            db=db,
+            user=user,
+            tipo_alerta="advertencia_normal",
+            accion_origen="posponer",
+            nombre_medicamento=med.nombre,
+            dosis=med.dosis,
+            es_critico=False,
+        )
     registrar_evento_mongo(
         evento=evento_mongo,
         id_usuario=user.id_usuario,
