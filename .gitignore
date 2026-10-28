@@ -6,8 +6,8 @@ __pycache__/
 build/
 local.properties
 .idea/
-docs/
 busquedas/
 .DS_Store
 *.rar
 *.png
+!docs/**/*.png
