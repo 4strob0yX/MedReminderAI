@@ -1,32 +1,35 @@
 # MedReminder AI
 
-Sistema de gestion y recordatorio farmacologico: app Android (Kotlin/Compose) + backend FastAPI + MySQL + Ollama (`medi-clinico`).
+Sistema inteligente de gestión y recordatorio farmacológico: aplicación móvil Android (Kotlin/Compose) + microservicios backend FastAPI + base de datos MySQL + IA clínica local en Ollama (`medi-clinico`).
 
-## Funciones
-- Registro con fecha de nacimiento; racha y penalizacion de honor segun rango de edad.
-- Vista de cuidador y alertas (automaticas en medicamentos criticos).
-- Alarmas nativas y notificaciones; escaner de recetas con IA local.
+## Funciones Principales
+- **Registro personalizado:** Cálculo de edad y ajuste de gamificación (racha de días y penalización de honor) según rango etario.
+- **Supervisión y Cuidador:** Panel para cuidadores con alertas automáticas inmediatas ante omisiones o posposiciones de medicamentos críticos, y avisos de advertencia en fármacos normales para adultos mayores.
+- **Alarmas Nativas:** Notificaciones locales deterministas y alarmas de alta prioridad (`AlarmManager`) independientes de la conectividad a internet.
+- **Escáner Inteligente:** Extracción y precarga de recetas médicas mediante modelo de visión multimodal.
 
-## Inicio rapido
-```
-docker compose up -d --build   # MySQL + API (http://localhost:8000/docs)
-```
-App Android: abrir `android/` en Android Studio (ver `android/SETUP_AUTH.md`).
+## Inicio Rápido
 
-## Documentacion
-`docs/` contiene los manuales (.docx). Regenerar y validar:
+### Backend y Base de Datos
+```bash
+docker compose up -d --build
 ```
-python3 scripts/build_all_manuals.py
-python3 scripts/verify_solution.py
-```
+- API y documentación interactiva: `http://localhost:8000/docs`
 
-## Estructura del repositorio
-| Carpeta | Contenido |
+### Aplicación Android
+- Abrir la carpeta `android/` en Android Studio (ver [`android/SETUP_AUTH.md`](android/SETUP_AUTH.md)).
+
+## Documentación Oficial
+En la carpeta [`docs/`](docs/) se encuentran disponibles los manuales institucionales en formato `.docx`:
+- **Manual Técnico Oficial:** Arquitectura, especificación formal PEAS, tablas de verdad y lógica proposicional.
+- **Manual de Usuario:** Guías paso a paso para el paciente y familiares.
+- **Manual de Instalación y Despliegue:** Guía de configuración y puesta en marcha del entorno.
+- **Guía de Uso Rápido:** Resumen operativo de acciones frecuentes.
+
+## Estructura del Repositorio
+| Directorio | Descripción |
 |---|---|
-| `android/` | App Android (Kotlin + Compose) |
-| `backend/` | API FastAPI (routers, servicios, modelos, esquemas) |
-| `db/mysql/init/` | DDL de MySQL (`01_schema.sql`) |
-| `busquedas_ia/` | Algoritmos de búsqueda (UCS, heurística) y comparador |
-| `docs/` | Manuales `.docx`, portada, infografías, logos y capturas |
-| `docs/pdf/` | PDFs de entrega |
-| `scripts/` | Generación y verificación de documentos |
+| `android/` | Aplicación móvil nativa Android (Kotlin, Jetpack Compose, MVVM) |
+| `backend/` | API REST en FastAPI, servicios de IA clínica, autenticación y esquemas Pydantic |
+| `db/mysql/init/` | Scripts de inicialización y definición del esquema relacional DDL (`01_schema.sql`) |
+| `docs/` | Manuales oficiales del proyecto (.docx), carátula institucional y capturas |
