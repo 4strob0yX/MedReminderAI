@@ -55,8 +55,8 @@ def build_guia_rapida():
     add_section_heading(doc, "1. FLUJO DE INICIO EN 3 PASOS VISUALES", level=1)
     
     p1_bullets = [
-        "Acceso Inmediato: Ingrese su correo electrónico y su contraseña registrada. Si aún no cuenta con un perfil personal, pulse 'Regístrate' al pie de la pantalla para crearlo en 30 segundos.",
-        "Protección Táctil Inteligente: Al presionar 'Iniciar Sesión', el botón se desactiva al instante durante la conexión para evitar peticiones duplicadas o errores causados por temblores en las manos o pulsaciones involuntarias.",
+        "Acceso y Edad Clínica: Ingrese su correo, contraseña y fecha de nacimiento en el registro. El sistema adapta la experiencia según su edad: gamificación con racha y honor para jóvenes/adultos (<60 años) o supervisión automática de cuidador para adultos mayores (≥60 años).",
+        "Protección Táctil Inteligente: Al presionar 'Iniciar Sesión', el botón se desactiva al instante durante la conexión para evitar peticiones duplicadas o errores causados por temblores en las manos.",
         "Recuperación Rápida: Si olvidó sus credenciales, solicite el restablecimiento seguro directamente en la pantalla de bienvenida con verificación en un solo paso."
     ]
     add_step_card(
@@ -64,19 +64,17 @@ def build_guia_rapida():
         step_label="Paso 1 (30 seg)",
         title="Acceso y Perfil del Paciente",
         bullets=p1_bullets,
-        img_path="docs/screenshots/01_login.png",
+        img_path=str(BASE_DIR / "docs/screenshots/01_login.png"),
         caption="Inicio seguro y protegido",
         img_width=0.9
     )
     
-    add_page_break(doc)
-    
     # ==========================================================================
-    # PÁGINA 2: PASOS 2 Y 3 + TARJETA DE REFERENCIA RÁPIDA DE BOTONES DE ALARMA
+    # PASOS 2 Y 3 + TARJETA DE REFERENCIA RÁPIDA DE BOTONES DE ALARMA
     # ==========================================================================
     p2_bullets = [
-        "Forma Farmacéutica: Ingrese a la pestaña «Nuevo» y seleccione el formato del medicamento: Comprimidos, Jarabe o Inyectable.",
-        "Dosis Rápida: Pulse un botón sugerido (500 mg, 1 comp., 10 ml) para evitar teclear y elija el intervalo de tomas de medicamentos (ej: cada 8 horas).",
+        "Autocompletado con IA y Escaneo de Recetas: En «Nuevo Medicamento», pulse 'Sugerencias IA' o escanee su receta médica con Ollama (medi-clinico) para autocompletar dosis, frecuencia de tomas de medicamentos e instrucciones.",
+        "Dosis Rápida y Crítica: Seleccione el formato (Pastilla, Gotas o Inyección), el color distintivo y marque si es un medicamento crítico no posponible.",
         "Control de Existencias: Capture las piezas físicas disponibles en casa para que el botiquín calcule de inmediato los días de cobertura.",
     ]
     add_step_card(
@@ -84,43 +82,41 @@ def build_guia_rapida():
         step_label="Paso 2 (1 min)",
         title="Registro de Medicamento y Horario",
         bullets=p2_bullets,
-        img_path="docs/screenshots/03_nuevo_medicamento.png",
-        caption="Alta ágil de tratamientos",
+        img_path=str(BASE_DIR / "docs/screenshots/03_nuevo_medicamento.png"),
+        caption="Alta ágil con IA local",
         img_width=0.9
     )
     
     p3_bullets = [
-        "Disparo de Alarma: Al cumplirse la hora exacta, sonará la alarma prioritaria con vibración y pantalla flotante Heads-Up.",
-        "Asistente Medi: Medi anunciará por voz la dosis exacta requerida para sus tomas de medicamentos sin necesidad de leer la pantalla.",
-        "Confirmación Inmediata: En la pantalla principal «Hoy», pulse un solo botón táctil de 56 dp para registrar la toma de medicamentos con timestamp UTC y descontar 1 unidad del botiquín.",
+        "Disparo de Alarma Nativa: Al cumplirse la hora exacta, saltará automáticamente la pantalla nativa de alarma con sonido, vibración y acciones directas aún con el teléfono bloqueado.",
+        "Asistente Medi (Ollama): Medi anunciará por voz la dosis exacta requerida para sus tomas de medicamentos y resolverá dudas clínicas en tiempo real.",
+        "Confirmación y Supervisión Senior: En «Hoy», pulse un solo botón de 56 dp para registrar la toma de medicamentos. En adultos mayores, omitir o posponer medicamentos críticos alerta automáticamente al cuidador.",
     ]
     add_step_card(
         doc,
         step_label="Paso 3 (Acción)",
         title="Notificación y Registro de Tomas de Medicamentos",
         bullets=p3_bullets,
-        img_path="docs/screenshots/02_hoy.png",
+        img_path=str(BASE_DIR / "docs/screenshots/02_hoy.png"),
         caption="Confirmación en un toque",
         img_width=0.9
     )
     
-    add_section_heading(doc, "2. TARJETA DE REFERENCIA RÁPIDA DE BOTONES DE ALARMA", level=1)
+    add_section_heading(doc, "2. TARJETA DE REFERENCIA RÁPIDA DE BOTONES DE ALARMA", level=1, page_break_before=True)
     
     btn_headers = ["Botón de Acción", "Propósito y Situación Clínica", "Efecto en Tomas de Medicamentos e Inventario"]
     btn_rows = [
-        ["🟢 Tomar Ahora", "Pulsar al momento exacto de ingerir el medicamento prescrito.", "Registra la toma de medicamentos con timestamp legal y descuenta 1 unidad del stock."],
-        ["🟡 Posponer (+10 min)", "Aplazar la alarma si está comiendo, manejando o temporalmente ocupado.", "Reprograma la alarma exactamente 10 minutos (máximo 2 posposiciones consecutivas)."],
-        ["⚪ Omitir", "Utilizar únicamente si el médico suspendió la dosis o por indicación clínica.", "Registra la omisión justificada con notas clínicas sin descontar unidades del stock."],
-        ["🔵 Deshacer tomas de medicamentos", "Pulsación accidental involuntaria sobre el botón 'Tomar Ahora'.", "Disponible por 5 segundos en la barra inferior para anular el registro y restaurar el stock."]
+        ["[VERDE] Tomar Ahora", "Pulsar al momento exacto de ingerir el medicamento prescrito.", "Registra la toma de medicamentos con timestamp legal y descuenta 1 unidad del stock."],
+        ["[ÁMBAR] Posponer (+30 min)", "Aplazar la alarma si está comiendo, manejando o temporalmente ocupado.", "Reprograma la alarma exactamente 30 minutos (máximo 2 posposiciones consecutivas)."],
+        ["[GRIS] Omitir", "Utilizar únicamente si el médico suspendió la dosis o por indicación clínica.", "Registra la omisión justificada sin descontar stock (en adultos mayores notifica al cuidador)."],
+        ["[AZUL] Deshacer tomas de medicamentos", "Pulsación accidental involuntaria sobre el botón 'Tomar Ahora'.", "Disponible por 5 segundos en la barra inferior para anular el registro y restaurar el stock."]
     ]
     add_truth_table(doc, btn_headers, btn_rows, "Tabla 1: Funcionalidad de los botones en recordatorios de tomas de medicamentos", [1.8, 2.3, 2.4])
     
-    add_page_break(doc)
-    
     # ==========================================================================
-    # PÁGINA 3: SEMÁFORO DE INVENTARIO, REGLA DE ORO Y FAQ DE EMERGENCIA
+    # SEMÁFORO DE INVENTARIO, REGLA DE ORO Y FAQ DE EMERGENCIA
     # ==========================================================================
-    add_section_heading(doc, "3. SEMÁFORO VISUAL DE INVENTARIO («MI BOTIQUÍN»)", level=1)
+    add_section_heading(doc, "3. SEMÁFORO VISUAL DE INVENTARIO («MI BOTIQUÍN»)", level=1, page_break_before=True)
     add_body_p(
         doc,
         "La pestaña «Mi Botiquín» clasifica en tiempo real sus existencias de medicamentos según los días de cobertura restantes:"
@@ -128,29 +124,29 @@ def build_guia_rapida():
     
     sem_headers = ["Nivel del Semáforo", "Cobertura Restante", "Estado y Acción Preventiva Requerida"]
     sem_rows = [
-        ["🟢 Verde (Suficiente)", "Más de 5 días de tratamiento", "Existencias óptimas en el hogar. Todas las tomas de medicamentos están garantizadas."],
-        ["🟡 Amarillo (Por agotarse)", "3 días o menos de tratamiento", "Advertencia temprana: acuda oportunamente a la farmacia para reabastecer las cajas."],
-        ["🔴 Rojo (Crítico)", "Stock agotado (0 comprimidos)", "Alerta crítica: riesgo inminente de interrupción en las tomas de medicamentos. Reponer ya."]
+        ["[VERDE] Suficiente", "Más de 5 días de tratamiento", "Existencias óptimas en el hogar. Todas las tomas de medicamentos están garantizadas."],
+        ["[AMARILLO] Por agotarse", "3 días o menos de tratamiento", "Advertencia temprana: acuda oportunamente a la farmacia para reabastecer las cajas."],
+        ["[ROJO] Crítico", "Stock agotado (0 comprimidos)", "Alerta crítica: riesgo inminente de interrupción en las tomas de medicamentos. Reponer ya."]
     ]
     add_truth_table(doc, sem_headers, sem_rows, "Tabla 2: Semáforo visual para prevención de desabastecimiento de medicamentos", [1.8, 2.0, 2.7])
     
     add_callout(
         doc,
         "Por estrictos criterios de seguridad clínica y farmacológica, el sistema solo permite posponer una dosis un MÁXIMO "
-        "DE 2 VECES consecutivas (+10 minutos cada una). Al sonar la tercera alarma, el botón de posponer se bloquea "
+        "DE 2 VECES consecutivas (+30 minutos cada una). Al sonar la tercera alarma, el botón de posponer se bloquea "
         "y el sistema exige confirmar la ingesta mediante 'Tomar Ahora' o justificar la omisión con 'Omitir'. "
-        "Esta restricción formal previene intoxicaciones o sobredosis por acumulación horaria y salvaguarda la salud del paciente.",
+        "En pacientes adultos mayores (≥60 años), omitir o posponer un medicamento crítico envía una alerta automática inmediata al Panel del Cuidador.",
         callout_type="warn",
-        title="REGLA DE ORO MÉDICA: MÁXIMO 2 POSPOSICIONES DE TOMAS DE MEDICAMENTOS"
+        title="REGLA DE ORO MÉDICA: MÁXIMO 2 POSPOSICIONES DE TOMAS DE MEDICAMENTOS (+30 MIN)"
     )
     
     add_section_heading(doc, "4. FAQ DE EMERGENCIA Y RESOLUCIÓN RÁPIDA", level=1)
     
     faq_headers = ["Pregunta Frecuente", "Diagnóstico Técnico Rápido", "Solución Inmediata en Pantalla"]
     faq_rows = [
-        ["¿No suena la alarma con el teléfono bloqueado?", "Ahorro de batería agresivo de Android en segundo plano.", "Vaya a Ajustes > Apps > MedReminder AI > Batería y elija 'Sin restricciones'. Verifique volumen de alarmas."],
+        ["¿No suena la alarma con el teléfono bloqueado?", "Ahorro de batería agresivo de Android en segundo plano.", "Vaya a Ajustes > Apps > MedReminder AI > Batería y elija 'Sin restricciones'. Verifique permisos de Alarmas Exactas."],
         ["¿Olvidé registrar una toma de medicamentos a tiempo?", "La dosis se tomó en hora pero no se confirmó en la app.", "Abra la pantalla «Hoy», pulse sobre la tarjeta atrasada y confirme la toma de medicamentos con su hora real."],
-        ["¿Cómo edito una dosis o suspendo un tratamiento?", "Cambio de prescripción médica o ajuste de dosis.", "En «Mi Botiquín», pulse sobre el fármaco y seleccione 'Editar Pauta' o pulse 'Pausar Tratamiento'."]
+        ["¿Cómo vinculo o superviso a un adulto mayor como cuidador?", "Supervisión familiar de adherencia y alertas críticas.", "Desde la cabecera superior pulse 'Modo Cuidador' para abrir el Panel de Supervisión y vincular al paciente por correo."]
     ]
     add_truth_table(doc, faq_headers, faq_rows, "Tabla 3: Solución inmediata a las 3 incidencias más comunes", [2.0, 2.0, 2.5])
     
@@ -158,15 +154,15 @@ def build_guia_rapida():
         doc,
         "MedReminder AI — Sistema Inteligente de Gestión y Recordatorio Farmacológico\n"
         "Dirección de TIC • Asignatura: Fundamentos de Inteligencia Artificial • Docente: Ing. Hector Velazquez Estrada\n"
-        "Equipo: Gutierrez Ugalde Samuel • Nava Garcia Rodrigo • Castillo Ramirez Nahum Yabet • Ramirez Romero Pablo • Peña Hernandez Alexander (ITIID - D73)",
+        "Equipo: Gutierrez Ugalde Samuel • Nava Garcia Rodrigo • Castillo Ramirez Nahum Yabet • Ramirez Romero Pablo • Peña Hernandez Alexander (DSM - 53)",
         callout_type="tip",
         title="CENTRO DE ASISTENCIA Y CONTACTO INSTITUCIONAL UTVT"
     )
     
     # Guardar documento en docs/
-    out_path = "docs/Guia_de_Uso_Rapido_MedReminderAI.docx"
+    out_path = str(BASE_DIR / "docs/Guia_de_Uso_Rapido_MedReminderAI.docx")
     doc.save(out_path)
-    print(f"✅ Guía de Uso Rápido generada exitosamente en: {out_path}")
+    print(f"Guía de Uso Rápido generada exitosamente en: {out_path}")
     return out_path
 
 if __name__ == "__main__":

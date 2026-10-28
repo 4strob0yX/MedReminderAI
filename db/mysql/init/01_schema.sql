@@ -3,6 +3,8 @@ CREATE TABLE usuario (
     nombre_completo VARCHAR(255) NOT NULL,
     correo VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    fecha_nacimiento DATE NULL,
+    rol VARCHAR(30) NOT NULL DEFAULT 'paciente',
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -79,4 +81,22 @@ CREATE TABLE historial_toma (
     notas TEXT NULL,
     FOREIGN KEY (id_recordatorio) REFERENCES recordatorio(id_recordatorio) ON DELETE CASCADE,
     INDEX idx_historial_recordatorio_fecha (id_recordatorio, fecha_accion)
+);
+
+-- Alertas persistentes enviadas al cuidador (adultos mayores / medicamentos criticos).
+CREATE TABLE alerta_cuidador (
+    id_alerta INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    tipo_alerta VARCHAR(40) NOT NULL DEFAULT 'advertencia_normal',
+    accion_origen VARCHAR(40) NOT NULL DEFAULT 'posponer',
+    nombre_medicamento VARCHAR(160) NOT NULL,
+    dosis VARCHAR(80) NOT NULL DEFAULT '',
+    es_critico BOOLEAN NOT NULL DEFAULT FALSE,
+    mensaje VARCHAR(500) NOT NULL,
+    nombre_cuidador VARCHAR(160) NOT NULL DEFAULT 'Cuidador Principal',
+    telefono_cuidador VARCHAR(60) NOT NULL DEFAULT '',
+    atendida BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    INDEX ix_alerta_cuidador_usuario (id_usuario)
 );

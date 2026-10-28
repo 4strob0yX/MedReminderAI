@@ -311,10 +311,12 @@ def add_utvt_cover(doc: docx.Document, title: str, subtitle: str, doc_code: str 
         # 4. Integrantes del Equipo (P17)
         p17 = doc.paragraphs[17]
         p17.text = ""
-        p17.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p17.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p17.paragraph_format.left_indent = Inches(1.85)
+        p17.paragraph_format.first_line_indent = Pt(0)
         p17.paragraph_format.space_before = Pt(1)
         p17.paragraph_format.space_after = Pt(2)
-        p17.paragraph_format.line_spacing = 1.05
+        p17.paragraph_format.line_spacing = 1.1
         
         alumnos = [
             ("222410897", "Gutierrez Ugalde Samuel"),
@@ -324,7 +326,7 @@ def add_utvt_cover(doc: docx.Document, title: str, subtitle: str, doc_code: str 
             ("222410899", "Peña Hernandez Alexander")
         ]
         for i, (mat, nom) in enumerate(alumnos):
-            r_al = p17.add_run(f"{mat}\t-\t{nom}" + ("\n" if i < len(alumnos) - 1 else ""))
+            r_al = p17.add_run(f"{mat}   –   {nom}" + ("\n" if i < len(alumnos) - 1 else ""))
             r_al.font.name = FONT_FAMILY
             r_al.font.size = Pt(10)
             r_al.font.bold = True
@@ -349,25 +351,19 @@ def add_utvt_cover(doc: docx.Document, title: str, subtitle: str, doc_code: str 
                 if not p_rem.text.strip():
                     p_rem._p.getparent().remove(p_rem._p)
                     
-        # 7. Localizar el párrafo con sectPr (final de la portada) y actualizar fecha y código
+        # 7. Localizar el párrafo final de la portada y actualizar fecha y código
         p_last = None
         for p in doc.paragraphs:
-            if p._p.xpath('./w:pPr/w:sectPr'):
+            if p._p.xpath('./w:pPr/w:sectPr') or "SANTA MARÍA ATARASQUILLO" in p.text:
                 p_last = p
                 break
                 
         if p_last is not None:
-            # Asegurar tipo nextPage explícito y sin referencias de encabezado en la portada
             pPr = p_last._p.pPr
             if pPr is not None:
                 sectPr_p = pPr.find(qn('w:sectPr'))
                 if sectPr_p is not None:
-                    for hr in list(sectPr_p.findall(qn('w:headerReference'))):
-                        sectPr_p.remove(hr)
-                    for fr in list(sectPr_p.findall(qn('w:footerReference'))):
-                        sectPr_p.remove(fr)
-                    if sectPr_p.find(qn('w:type')) is None:
-                        sectPr_p.insert(0, parse_xml(r'<w:type %s w:val="nextPage"/>' % nsdecls('w')))
+                    pPr.remove(sectPr_p)
             
             for r in list(p_last.runs):
                 p_last._p.remove(r._r)
@@ -386,11 +382,9 @@ def add_utvt_cover(doc: docx.Document, title: str, subtitle: str, doc_code: str 
             r_loc.font.size = Pt(8.0)
             r_loc.font.color.rgb = RGB_MUTED
             
-        # 8. Remover el párrafo inicial vacío de la Sección 1 si existe
-        if len(doc.paragraphs) > 0:
-            p_after = doc.paragraphs[-1]
-            if p_after != p_last and not p_after.text.strip():
-                p_after._p.getparent().remove(p_after._p)
+        # 8. Remover cualquier párrafo vacío posterior a p_last
+        while len(doc.paragraphs) > 0 and doc.paragraphs[-1] != p_last and not doc.paragraphs[-1].text.strip():
+            doc.paragraphs[-1]._p.getparent().remove(doc.paragraphs[-1]._p)
         return
 
     # Fallback si Portada.docx no estuviera disponible: carátula programática
@@ -579,10 +573,11 @@ def add_version_control_table(doc: docx.Document, versions: list, title: str = "
     Columnas: Versión | Fecha | Autor / Responsable | Descripción de Cambios
     """
     p_title = doc.add_paragraph()
+    p_title.paragraph_format.page_break_before = True
     p_title.paragraph_format.space_before = Pt(8)
     p_title.paragraph_format.space_after = Pt(4)
     p_title.paragraph_format.keep_with_next = True
-    r_t = p_title.add_run(f"📋 {title}")
+    r_t = p_title.add_run(f"» {title}")
     r_t.font.name = FONT_FAMILY
     r_t.font.size = Pt(12)
     r_t.font.bold = True
@@ -639,7 +634,6 @@ def add_version_control_table(doc: docx.Document, versions: list, title: str = "
                 else:
                     run.font.color.rgb = RGB_DARK
                     
-    add_page_break(doc)
     return table
 
 # ==============================================================================
@@ -694,7 +688,7 @@ def add_compact_utvt_header(doc: docx.Document, title: str, subtitle: str, doc_c
     r_u1.font.bold = True
     r_u1.font.color.rgb = RGB_NAVY
     
-    r_u2 = p_c.add_run("DIRECCIÓN DE CARRERA DE TIC • DSM   |   GRUPO: ITIID - D73\n")
+    r_u2 = p_c.add_run("DIRECCIÓN DE CARRERA DE TIC • DSM   |   GRUPO: DSM - 53\n")
     r_u2.font.name = FONT_FAMILY
     r_u2.font.size = Pt(8.0)
     r_u2.font.bold = True
@@ -723,6 +717,10 @@ def add_compact_utvt_header(doc: docx.Document, title: str, subtitle: str, doc_c
     # Fila 1: Integrantes del equipo (Celdas fusionadas)
     c_eq = tbl.rows[1].cells[0].merge(tbl.rows[1].cells[2])
     c_eq.width = Inches(6.5)
+    tcPr_eq = c_eq._tc.get_or_add_tcPr()
+    for tcw in list(tcPr_eq.findall(qn('w:tcW'))):
+        tcPr_eq.remove(tcw)
+    tcPr_eq.append(parse_xml(r'<w:tcW %s w:w="9360" w:type="dxa"/>' % nsdecls('w')))
     set_cell_shading(c_eq, "F8FAFC")
     set_cell_margins(c_eq, top=30, bottom=30, left=80, right=80)
     p_eq = c_eq.paragraphs[0]
@@ -750,6 +748,10 @@ def add_compact_utvt_header(doc: docx.Document, title: str, subtitle: str, doc_c
     # Fila 2: Título Principal y Subtítulo (Celdas fusionadas)
     c_tit = tbl.rows[2].cells[0].merge(tbl.rows[2].cells[2])
     c_tit.width = Inches(6.5)
+    tcPr_tit = c_tit._tc.get_or_add_tcPr()
+    for tcw in list(tcPr_tit.findall(qn('w:tcW'))):
+        tcPr_tit.remove(tcw)
+    tcPr_tit.append(parse_xml(r'<w:tcW %s w:w="9360" w:type="dxa"/>' % nsdecls('w')))
     set_cell_shading(c_tit, HEX_NAVY)
     set_cell_margins(c_tit, top=50, bottom=50, left=100, right=100)
     p_tit = c_tit.paragraphs[0]
@@ -780,6 +782,7 @@ def add_native_toc(doc: docx.Document, initial_items: list = None):
     NOTA TÉCNICA: El título NO se crea como Heading 1 para evitar que Word lo indexe recursivamente en el TOC.
     """
     p_title = doc.add_paragraph()
+    p_title.paragraph_format.page_break_before = True
     p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p_title.paragraph_format.space_before = Pt(8)
     p_title.paragraph_format.space_after = Pt(10)
@@ -842,16 +845,13 @@ def add_native_toc(doc: docx.Document, initial_items: list = None):
             r_pg.font.bold = is_l1
             r_pg.font.color.rgb = RGB_NAVY if is_l1 else RGB_MUTED
             
-    # 4. fldChar end con salto de página en el mismo párrafo (sin líneas vacías residuales)
+    # 4. fldChar end sin caracteres de salto que generen glifos vacíos
     p_end = doc.add_paragraph()
     p_end.paragraph_format.space_before = Pt(0)
     p_end.paragraph_format.space_after = Pt(0)
     r4 = p_end.add_run()
     r4.font.name = FONT_FAMILY
     r4._r.append(parse_xml(r'<w:fldChar %s w:fldCharType="end"/>' % nsdecls('w')))
-    r_br = p_end.add_run()
-    r_br.font.name = FONT_FAMILY
-    r_br.add_break(docx.enum.text.WD_BREAK.PAGE)
 
 # ==============================================================================
 # ÍNDICE RÁPIDO COMPACTO (GUÍA DE USO RÁPIDO)
@@ -866,6 +866,7 @@ def add_compact_toc(doc: docx.Document, items: list = None):
     set_cell_border(cell, left=HEX_TEAL, top=HEX_BORDER, bottom=HEX_BORDER, right=HEX_BORDER, sz="12")
     
     p = cell.paragraphs[0]
+    p.paragraph_format.page_break_before = True
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(0)
     p.paragraph_format.line_spacing = 1.0
@@ -911,14 +912,30 @@ def format_table_structure(table, col_widths=None, repeat_header=True):
     """
     Configura alineación centrada, w:cantSplit en todas las filas para evitar roturas
     defectuosas entre saltos de página, w:tblHeader en la cabecera y anchos explícitos de columna.
-    Normaliza anchos si superan el margen imprimible (6.5 pulgadas).
+    Normaliza anchos si superan el margen imprimible (6.5 pulgadas) y fija w:tblW / w:tblGrid en dxa.
     """
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
     if col_widths and len(col_widths) == len(table.rows[0].cells):
         total_w = sum(col_widths)
         if total_w > 6.53:
             scale = 6.5 / total_w
             col_widths = [round(w * scale, 2) for w in col_widths]
+        col_dxa = [int(round(w * 1440)) for w in col_widths]
+        total_dxa = sum(col_dxa)
+        tblPr = table._tbl.tblPr
+        for tw in list(tblPr.findall(qn('w:tblW'))):
+            tblPr.remove(tw)
+        tblPr.append(parse_xml(r'<w:tblW %s w:w="%d" w:type="dxa"/>' % (nsdecls('w'), total_dxa)))
+        tblGrid = table._tbl.find(qn('w:tblGrid'))
+        if tblGrid is not None:
+            for gc in list(tblGrid.findall(qn('w:gridCol'))):
+                tblGrid.remove(gc)
+            for dxa in col_dxa:
+                tblGrid.append(parse_xml(r'<w:gridCol %s w:w="%d"/>' % (nsdecls('w'), dxa)))
+    else:
+        col_dxa = None
+
     for r_idx, row in enumerate(table.rows):
         trPr = row._tr.get_or_add_trPr()
         # Garantizar que ninguna fila se parta a mitad de página
@@ -928,6 +945,11 @@ def format_table_structure(table, col_widths=None, repeat_header=True):
         if col_widths and len(col_widths) == len(row.cells):
             for c_idx, w in enumerate(col_widths):
                 row.cells[c_idx].width = Inches(w)
+                if col_dxa:
+                    tcPr = row.cells[c_idx]._tc.get_or_add_tcPr()
+                    for tcw in list(tcPr.findall(qn('w:tcW'))):
+                        tcPr.remove(tcw)
+                    tcPr.append(parse_xml(r'<w:tcW %s w:w="%d" w:type="dxa"/>' % (nsdecls('w'), col_dxa[c_idx])))
 
 def add_step_card(doc: docx.Document, step_label: str, title: str, bullets: list, img_path: str, caption: str, img_width: float = 0.9):
     """
@@ -1186,7 +1208,7 @@ def add_variable_dictionary_table(doc: docx.Document, variables: list, title: st
     p_title.paragraph_format.space_before = Pt(10)
     p_title.paragraph_format.space_after = Pt(4)
     p_title.paragraph_format.keep_with_next = True
-    r_t = p_title.add_run(f"📋 {title}")
+    r_t = p_title.add_run(f"» {title}")
     r_t.font.name = FONT_FAMILY
     r_t.font.size = Pt(10.5)
     r_t.font.bold = True
@@ -1256,7 +1278,7 @@ def add_checklist_table(doc: docx.Document, items: list, title: str = "LISTA DE 
     p_title.paragraph_format.space_before = Pt(10)
     p_title.paragraph_format.space_after = Pt(4)
     p_title.paragraph_format.keep_with_next = True
-    r_t = p_title.add_run(f"✅ {title}")
+    r_t = p_title.add_run(f"[VERIFICACIÓN] {title}")
     r_t.font.name = FONT_FAMILY
     r_t.font.size = Pt(11)
     r_t.font.bold = True
@@ -1443,9 +1465,9 @@ def add_callout(doc: docx.Document, text: str, callout_type: str = "tip", title:
     Tipos: 'tip' (clínico), 'warn' (advertencia/regla de oro), 'arch' (técnico/arquitectura).
     """
     colors = {
-        "tip":  (HEX_CALLOUT_BG, HEX_TEAL, "💡 CONSEJO CLÍNICO Y OPERATIVO"),
-        "warn": (HEX_WARN_BG, "D97706", "⚠️ REGLA DE ORO DEL SISTEMA"),
-        "arch": ("EFF6FF", "2563EB", "🏛️ DECISIÓN DE ARQUITECTURA E INGENIERÍA")
+        "tip":  (HEX_CALLOUT_BG, HEX_TEAL, "» CONSEJO CLÍNICO Y OPERATIVO"),
+        "warn": (HEX_WARN_BG, "D97706", "[!] REGLA DE ORO DEL SISTEMA"),
+        "arch": ("EFF6FF", "2563EB", "» DECISIÓN DE ARQUITECTURA E INGENIERÍA")
     }
     bg_color, border_color, default_title = colors.get(callout_type, colors["tip"])
     header_title = title if title else default_title
@@ -1488,7 +1510,7 @@ def add_code_block(doc: docx.Document, code_text: str, caption: str = None):
         p_c.paragraph_format.space_after = Pt(3)
         p_c.paragraph_format.keep_with_next = True
         set_paragraph_left_align(p_c)
-        r_c = p_c.add_run(f"💻 {caption}")
+        r_c = p_c.add_run(f"» {caption}")
         r_c.font.name = FONT_FAMILY
         r_c.font.size = Pt(9.0)
         r_c.font.bold = True
@@ -1531,13 +1553,18 @@ def add_code_block(doc: docx.Document, code_text: str, caption: str = None):
     return table
 
 def add_figure_image(doc: docx.Document, img_path: str, caption: str, width_in_inches: float = 4.5):
-    """Inserta una imagen centrada con keep_with_next y pie de figura formal de 9pt."""
+    """Inserta una imagen centrada con keep_with_next y pie de figura formal de 9pt.
+    Para capturas verticales de smartphone (relación 9:20), optimiza el ancho a 1.85 in (~4.1 in de alto)
+    para evitar huecos blancos de media página.
+    """
     if not os.path.exists(img_path):
         return
+    if "screenshots" in str(img_path) and width_in_inches > 1.85:
+        width_in_inches = 1.85
         
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_img.paragraph_format.space_before = Pt(8)
+    p_img.paragraph_format.space_before = Pt(6)
     p_img.paragraph_format.space_after = Pt(2)
     p_img.paragraph_format.keep_with_next = True
     
@@ -1562,7 +1589,7 @@ def add_section_heading(doc: docx.Document, text: str, level: int = 1, page_brea
     """Agrega un encabezado estructurado con jerarquía clara y keep_with_next para evitar huérfanos."""
     h = doc.add_heading(level=level)
     h.paragraph_format.keep_with_next = True
-    if page_break_before:
+    if page_break_before or (level == 1 and text.startswith("1. INTRO")):
         h.paragraph_format.page_break_before = True
     run = h.add_run(text)
     run.font.name = FONT_FAMILY

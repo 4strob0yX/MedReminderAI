@@ -505,12 +505,12 @@ docker compose up -d
 
 # Salida esperada en terminal:
 # [+] Running 4/4
-#  ✔ Network medreminderai_default     Created
-#  ✔ Volume "medreminderai_db_data"    Created
-#  ✔ Volume "medreminderai_mongo_data" Created
-#  ✔ Container medreminder-mysql       Started
-#  ✔ Container medreminder-mongo       Started
-#  ✔ Container medreminder-api         Started""",
+#  [OK] Network medreminderai_default     Created
+#  [OK] Volume "medreminderai_db_data"    Created
+#  [OK] Volume "medreminderai_mongo_data" Created
+#  [OK] Container medreminder-mysql       Started
+#  [OK] Container medreminder-mongo       Started
+#  [OK] Container medreminder-api         Started""",
         caption="Lanzamiento de los contenedores en segundo plano"
     )
     

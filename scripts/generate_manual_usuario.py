@@ -85,8 +85,8 @@ def build_manual_usuario():
         ("1.5", "Beneficios Asistivos para el Paciente y la Familia", 5),
         ("1.6", "Acompañante Virtual Medi: Su Aliado Clínico Diario", 6),
         ("2.", "ANTES DE COMENZAR", 7),
-        ("2.1", "Requisitos del Teléfono Inteligente Android", 6),
-        ("2.2", "Permisos Necesarios Explicados de Forma Sencilla", 6),
+        ("2.1", "Requisitos del Teléfono Inteligente Android", 7),
+        ("2.2", "Permisos Necesarios Explicados de Forma Sencilla", 7),
         ("2.3", "Recomendaciones de Volumen, Sonido y Vibración", 7),
         ("2.4", "Conectividad: Funcionamiento con y sin Internet", 7),
         ("3.", "PRIMEROS PASOS", 8),
@@ -97,7 +97,7 @@ def build_manual_usuario():
         ("4.", "FUNCIONES (CON ESTRUCTURA FIJA POR TAREA: OBJETIVO, PASOS NUMERADOS, RESULTADO ESPERADO Y ADVERTENCIAS)", 12),
         ("4.1", "Tarea 4.1: Alta de un nuevo medicamento y programación de horarios", 12),
         ("4.2", "Tarea 4.2: Confirmación de tomas de medicamentos desde la vista «Hoy»", 14),
-        ("4.3", "Tarea 4.3: Posponer tomas de medicamentos (+10 minutos o +30 minutos)", 16),
+        ("4.3", "Tarea 4.3: Posponer tomas de medicamentos (+30 minutos)", 16),
         ("4.4", "Tarea 4.4: Omitir tomas de medicamentos con justificación clínica", 17),
         ("4.5", "Tarea 4.5: Deshacer tomas de medicamentos registradas por error", 18),
         ("4.6", "Tarea 4.6: Gestión y recarga rápida de stock en «Mi Botiquín» (+30 unidades)", 19),
@@ -415,10 +415,10 @@ def build_manual_usuario():
     
     btn_headers = ["Botón de Acción", "Propósito Clínico y Momento de Uso", "Impacto en Tomas de Medicamentos y Botiquín"]
     btn_rows = [
-        ["🟢 Tomar Ahora", "Pulsar al momento exacto de ingerir el medicamento prescrito.", "Registra la toma de medicamentos con timestamp legal y descuenta 1 unidad del stock."],
-        ["🟡 Posponer (+10 min)", "Aplazar la alarma si está comiendo, manejando o temporalmente ocupado.", "Reprograma la alarma exactamente 10 minutos (máximo 2 posposiciones consecutivas)."],
-        ["⚪ Omitir toma de medicamentos", "Utilizar únicamente si el médico suspendió la dosis o por indicación clínica.", "Registra la omisión justificada con notas clínicas sin descontar unidades del stock."],
-        ["🔵 Deshacer tomas de medicamentos", "Pulsación accidental involuntaria sobre el botón 'Tomar Ahora'.", "Disponible por 5 segundos en la barra inferior para anular el registro y restaurar el stock."]
+        ["[VERDE] Tomar Ahora", "Pulsar al momento exacto de ingerir el medicamento prescrito.", "Registra la toma de medicamentos con timestamp legal y descuenta 1 unidad del stock."],
+        ["[ÁMBAR] Posponer (+30 min)", "Aplazar la alarma si está comiendo, manejando o temporalmente ocupado.", "Reprograma la alarma exactamente 30 minutos (máximo 2 posposiciones consecutivas)."],
+        ["[GRIS] Omitir toma de medicamentos", "Utilizar únicamente si el médico suspendió la dosis o por indicación clínica.", "Registra la omisión justificada sin descontar unidades del stock (en adultos mayores alerta al cuidador)."],
+        ["[AZUL] Deshacer tomas de medicamentos", "Pulsación accidental involuntaria sobre el botón 'Tomar Ahora'.", "Disponible por 5 segundos en la barra inferior para anular el registro y restaurar el stock."]
     ]
     add_truth_table(doc, btn_headers, btn_rows, "Tabla 4.1: Catálogo de Botones de Acción en Recordatorios de Tomas de Medicamentos", [1.8, 2.3, 2.4])
     
@@ -480,22 +480,22 @@ def build_manual_usuario():
     # --------------------------------------------------------------------------
     # Tarea 4.3
     # --------------------------------------------------------------------------
-    add_section_heading(doc, "Tarea 4.3: Posponer tomas de medicamentos (+10 minutos o +30 minutos)", level=2)
+    add_section_heading(doc, "Tarea 4.3: Posponer tomas de medicamentos (+30 minutos)", level=2)
     add_body_p(
         doc,
         "Objetivo de la Tarea:\n"
         "Silenciar temporalmente una alarma de tomas de medicamentos cuando se encuentre manejando, en una junta o comiendo, "
-        "reprogramando el recordatorio para que vuelva a sonar de manera determinista unos minutos más tarde.\n\n"
+        "reprogramando el recordatorio para que vuelva a sonar de manera determinista 30 minutos más tarde.\n\n"
         "Pasos Numerados:\n"
-        "1. En la tarjeta del recordatorio activo, localice el botón secundario color ámbar «Posponer 30 min» (o +10 min según su ajuste).\n"
-        "2. Pulse el botón «Posponer» una sola vez.\n"
+        "1. En la tarjeta del recordatorio activo, localice el botón secundario color ámbar «Posponer 30 min».\n"
+        "2. Pulse el botón «Posponer 30 min» una sola vez.\n"
         "3. Observe el mensaje en pantalla: la aplicación silenciará la alarma y mostrará el contador: 'Pospuesto (1 de 2 permitidos)'.\n\n"
         "Resultado Esperado:\n"
-        "La alarma se silencia de inmediato y se reprograma en el reloj interno de su teléfono para despertar con timbre sonoro exacto al cumplirse el tiempo.\n\n"
+        "La alarma se silencia de inmediato y se reprograma en el reloj interno de su teléfono para despertar con timbre sonoro exacto al cumplirse 30 minutos.\n\n"
         "Advertencias:\n"
-        "• Regla de Oro de Seguridad Clínica: Solo se permite posponer un máximo de dos veces por cada toma de medicamentos. Tras la segunda "
+        "• Regla de Oro de Seguridad Clínica: Solo se permite posponer un máximo de dos veces por cada toma de medicamentos (+30 minutos cada vez). Tras la segunda "
         "posposición, el botón desaparecerá de la pantalla y estará obligado a confirmar la toma de medicamentos o registrar la omisión justificada. "
-        "Esta restricción protege su salud impidiendo que dos dosis se junten y causen intoxicación."
+        "En pacientes adultos mayores (≥60 años), posponer u omitir un medicamento normal muestra una advertencia de notificación al cuidador, y en medicamentos críticos envía la alerta automática inmediata al Panel del Cuidador."
     )
     
     # --------------------------------------------------------------------------

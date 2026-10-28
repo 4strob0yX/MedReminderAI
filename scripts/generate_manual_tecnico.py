@@ -95,12 +95,12 @@ def build_manual_tecnico():
         ("2.6", "Descripción Global y Propósito del Sistema MedReminder AI", 11),
         ("2.7", "Resumen de Metas Cuantitativas y Criterios de Aceptación", 12),
         ("3.", "ARQUITECTURA Y TECNOLOGÍAS", 13),
-        ("3.1", "Patrón Arquitectónico Global y Desacoplamiento Hexagonal", 11),
-        ("3.2", "Capa Móvil: Arquitectura MVVM con Jetpack Compose y Coroutines", 12),
-        ("3.3", "Capa de Backend: Microservicios en FastAPI, Inyección de Dependencias y Pydantic", 13),
-        ("3.4", "Doble Capa de Datos: MySQL Relacional 8.0 y Telemetría MongoDB 6.0", 14),
-        ("3.5", "Stack Tecnológico Formal con Versiones Exactas", 15),
-        ("3.6", "Especificación de Secuencia de Flujos Críticos Transaccionales", 16),
+        ("3.1", "Patrón Arquitectónico Global y Desacoplamiento Hexagonal", 13),
+        ("3.2", "Capa Móvil: Arquitectura MVVM con Jetpack Compose y Coroutines", 14),
+        ("3.3", "Capa de Backend: Microservicios en FastAPI, Inyección de Dependencias y Pydantic", 15),
+        ("3.4", "Doble Capa de Datos: MySQL Relacional 8.0 y Telemetría MongoDB 6.0", 15),
+        ("3.5", "Stack Tecnológico Formal con Versiones Exactas", 16),
+        ("3.6", "Especificación de Secuencia de Flujos Críticos Transaccionales", 17),
         ("4.", "INSTALACIÓN SOLO DE LAS PAQUETERÍAS Y DE LOS ELEMENTOS QUE INDICAN EN LOS REQUISITOS FUNCIONALES (NO ES TODO EL PROCESO DE INSTALACIÓN)", 18),
         ("4.1", "Alcance Delimitado: Paqueterías Estrictamente Vinculadas a los Requisitos Funcionales", 18),
         ("4.2", "Matriz de Paqueterías del Backend Python vs. Requisitos Funcionales", 18),
@@ -1079,6 +1079,13 @@ CREATE TABLE IF NOT EXISTS gamificacion_honor (
         ["POST", "/alergias/", "Bearer JWT", "AlergiaCreate", "AlergiaOut", "201, 401, 422"],
         ["GET", "/contactos/", "Bearer JWT", "None", "List[ContactoOut]", "200, 401"],
         ["POST", "/contactos/", "Bearer JWT", "ContactoCreate", "ContactoOut", "201, 401, 422"],
+        ["GET", "/recordatorios/dashboard", "Bearer JWT", "Query (fecha: YYYY-MM-DD)", "DashboardUnifiedOut", "200, 401"],
+        ["POST", "/ai/chat", "Bearer JWT", "AIChatRequest (prompt, contexto)", "AIChatResponse (Ollama medi-clinico)", "200, 401, 503"],
+        ["POST", "/ai/sugerir-medicamento", "Bearer JWT", "AISugerenciaRequest (nombre)", "AISugerenciaResponse", "200, 401"],
+        ["POST", "/ai/analizar-receta", "Bearer JWT", "Multipart/Base64 (imagen receta)", "AIRecetaResponse (lista JSON)", "200, 401, 422"],
+        ["GET", "/cuidador/panel", "Bearer JWT", "None", "CuidadorPanelOut (pacientes, alertas)", "200, 401"],
+        ["GET", "/cuidador/alertas", "Bearer JWT", "None", "List[AlertaCuidadorOut]", "200, 401"],
+        ["PUT", "/auth/me/edad", "Bearer JWT", "EdadUpdate (fecha_nacimiento)", "UserOut (edad, rango_edad)", "200, 401, 422"],
         ["GET", "/gamificacion/status", "Bearer JWT", "None", "GamificacionOut", "200, 401"],
         ["GET", "/health", "Pública", "None", "HealthOut (status, mysql, mongo)", "200, 503"]
     ]
@@ -1550,12 +1557,12 @@ volumes:
         "3. Hecho F1: X (Alergia confirmada = V)\n"
         "4. Negación de la Meta: ¬Bloqueo_Seguridad\n"
         "5. Resolución entre C1 y F1: Bloqueo_Seguridad\n"
-        "6. Resolución entre (5) y (4): Cláusula Vacía □ (Contradicción demostrada, meta probada)."
+        "6. Resolución entre (5) y (4): Cláusula Vacía ⊥ (Contradicción demostrada, meta probada)."
     )
     b2_headers = ["Paso de Resolución", "Cláusula 1", "Cláusula 2", "Resolvente / Cláusula Resultante", "Validez Deductiva", "Estado Clínico"]
     b2_rows = [
         ["Paso 1", "¬X ∨ Bloqueo", "X (Alergia = V)", "Bloqueo_Seguridad", "V", "Inferencia de bloqueo requerida"],
-        ["Paso 2", "Bloqueo_Seguridad", "¬Bloqueo_Seguridad", "□ (Cláusula Vacía)", "V", "Refutación exitosa: teorema clínico demostrado"]
+        ["Paso 2", "Bloqueo_Seguridad", "¬Bloqueo_Seguridad", "⊥ (Cláusula Vacía)", "V", "Refutación exitosa: teorema clínico demostrado"]
     ]
     add_truth_table(doc, b2_headers, b2_rows, "Tabla B.2: Tabla de Verdad y Pasos de Resolución de Robinson en Forma Normal Conjuntiva (FNC)", [1.0, 1.3, 1.3, 1.5, 1.0, 1.5])
     
