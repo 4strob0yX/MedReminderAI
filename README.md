@@ -19,3 +19,14 @@ App Android: abrir `android/` en Android Studio (ver `android/SETUP_AUTH.md`).
 python3 scripts/build_all_manuals.py
 python3 scripts/verify_solution.py
 ```
+
+## Estructura del repositorio
+| Carpeta | Contenido |
+|---|---|
+| `android/` | App Android (Kotlin + Compose) |
+| `backend/` | API FastAPI (routers, servicios, modelos, esquemas) |
+| `db/mysql/init/` | DDL de MySQL (`01_schema.sql`) |
+| `busquedas_ia/` | Algoritmos de búsqueda (UCS, heurística) y comparador |
+| `docs/` | Manuales `.docx`, portada, infografías, logos y capturas |
+| `docs/pdf/` | PDFs de entrega |
+| `scripts/` | Generación y verificación de documentos |
