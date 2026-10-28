@@ -17,7 +17,7 @@ import org.junit.Assert.*
 class ExampleInstrumentedTest {
     @Test
     fun useAppContext() {
-        // Context of the app under test.
+        // Contexto de la app bajo prueba.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals("com.medreminder.ai", appContext.packageName)
     }
