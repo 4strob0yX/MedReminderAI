@@ -19,4 +19,3 @@ App Android: abrir `android/` en Android Studio (ver `android/SETUP_AUTH.md`).
 python3 scripts/build_all_manuals.py
 python3 scripts/verify_solution.py
 ```
-Contexto tecnico: `docs/PROJECT_CONTEXT.md`.
