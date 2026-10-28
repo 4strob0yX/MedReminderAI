@@ -439,7 +439,27 @@ def build_manual_tecnico():
     ]
     add_truth_table(doc, t6_headers, t6_rows, "Tabla 2.7: Tabla de Verdad de Activación del Modo Castigo", [1.4, 1.4, 1.3, 2.4])
     
-    add_section_heading(doc, "2.2.7 Implementación de Referencia en Python del Motor Lógico Proposicional", level=3)
+    add_section_heading(doc, "2.2.7 Matriz Unificada y Consolidada de Todas las Tablas de Verdad", level=3)
+    add_body_p(
+        doc,
+        "A continuación se presenta la tabla integral unificada que consolida las seis reglas deductivas del Motor Lógico "
+        "Proposicional de MedReminder AI en una sola estructura analítica de referencia rápida para el equipo de desarrollo, "
+        "mantenimiento y auditoría clínica. Esta matriz sintetiza las variables de entrada, su formulación proposicional exacta, "
+        "las combinaciones booleanas de evaluación y la semántica transaccional resultante en el sistema:"
+    )
+    
+    t_unificada_headers = ["Regla / Dominio Clínico", "Fórmula Proposicional Canónica", "Variables de Entrada", "Condición (V)", "Resultado / Acción del Agente"]
+    t_unificada_rows = [
+        ["2.2.1 Validación Alta de Fármacos", "V_alta = p ∧ q ∧ r ∧ s\n¬V = ¬p ∨ ¬q ∨ ¬r ∨ ¬s", "p: Nombre válido\nq: Dosis > 0\nr: Frec. admisible\ns: Stock >= 0", "p=V ∧ q=V ∧\nr=V ∧ s=V", "V: Registro aprobado y persistido en DB.\nF: Rechazo formal con código HTTP 422."],
+        ["2.2.2 Alerta de Stock Crítico", "Alerta_Stock = A ∧ B", "A: Stock <= Umbral\nB: Tratamiento activo", "A=V ∧ B=V", "V: Disparo de advertencia urgente en Mi Botiquín.\nF: Inventario suficiente o tratamiento concluido."],
+        ["2.2.3 Exclusión Mutua en Tomas de Medicamentos", "Validez = (t ⊕ p ⊕ o) ∧\n¬(t∧p) ∧ ¬(t∧o) ∧ ¬(p∧o)", "t: Tomado nominal\np: Pospuesto temporal\no: Omitido formal", "Exactamente\nuna en V", "V: Transacción válida registrada en historial_toma.\nF: Contradicción clínica / transacción denegada."],
+        ["2.2.4 Límite de Posposiciones (k=2)", "Permitir_Posponer = C ∧ D", "C: Solicitud de aplazamiento\nD: Contador < 2", "C=V ∧ D=V", "V: Reprogramación determinista de alarma +30 min.\nF: Bloqueo de botón; forzar tomas de medicamentos u omisión de dosis."],
+        ["2.2.5 Bloqueo Alergias / Interacciones", "Bloqueo_Seguridad = X ∨ Y", "X: Alergia a principio activo\nY: Interacción medicamentosa", "X=V ∨ Y=V", "V: Bloqueo crítico inmediato de prescripción médica.\nF: Prescripción validada y segura."],
+        ["2.2.6 Modo Castigo y Pérdida de Honor", "Modo_Castigo = M ∧ N", "M: Omisiones >= 2 (72 h)\nN: Escudos == 0", "M=V ∧ N=V", "V: Activación Modo Castigo: bloqueo posposición.\nF: Consumo de escudo o modo normal preservado."]
+    ]
+    add_truth_table(doc, t_unificada_headers, t_unificada_rows, "Tabla 2.8: Matriz Unificada y Consolidada de Todas las Tablas de Verdad de MedReminder AI", [1.3, 1.4, 1.4, 1.1, 1.3])
+    
+    add_section_heading(doc, "2.2.8 Implementación de Referencia en Python del Motor Lógico Proposicional", level=3)
     add_body_p(
         doc,
         "A continuación se presenta el código fuente en Python (backend/app/core/logic_engine.py) que evalúa formalmente "
@@ -505,7 +525,7 @@ def evaluar_modo_castigo(omisiones_acumuladas: int, escudos_disponibles: int) ->
         ["RF-11", "Visualización del Árbol de IA", "Visualizar en el cliente móvil el árbol de exploración DFS/BFS y el estado de poda de ciclos para seguimiento del tratamiento.", "Baja", "Transparencia algorítmica y valor educativo para el paciente y médico."],
         ["RF-12", "Gamificación y Racha de Honor", "Calcular la racha de días continuos de cumplimiento, otorgando rangos (Hierro a Diamante) y administrando el Modo Castigo.", "Media", "Regla Lógica 6 (Activación de Modo Castigo tras omisiones consecutivas)."]
     ]
-    add_truth_table(doc, rf_headers, rf_rows, "Tabla 2.8: Matriz Canónica de Requisitos Funcionales (RF-01 a RF-12)", [0.8, 1.4, 2.3, 0.8, 1.2])
+    add_truth_table(doc, rf_headers, rf_rows, "Tabla 2.9: Matriz Canónica de Requisitos Funcionales (RF-01 a RF-12)", [0.8, 1.4, 2.3, 0.8, 1.2])
     
     add_section_heading(doc, "2.4 Matriz Formal de Requisitos No Funcionales (RNF-01 a RNF-08)", level=2)
     add_body_p(
@@ -525,7 +545,7 @@ def evaluar_modo_castigo(omisiones_acumuladas: int, escudos_disponibles: int) ->
         ["RNF-07", "Ergonomía y Accesibilidad Motriz", "Botones de interacción primaria con altura mayor o igual a 56 dp.", "Inspección de código fuente en Compose y pruebas táctiles con usuarios senior."],
         ["RNF-08", "Integridad Referencial en Persistencia", "Esquema relacional estricto en Tercera Forma Normal (3FN) con claves foráneas activas.", "Ejecución de script DDL de MySQL 8.0 con motor InnoDB y foreign keys habilitadas."]
     ]
-    add_truth_table(doc, rnf_headers, rnf_rows, "Tabla 2.9: Matriz Formal de Requisitos No Funcionales (RNF-01 a RNF-08)", [0.8, 1.6, 1.8, 2.3])
+    add_truth_table(doc, rnf_headers, rnf_rows, "Tabla 2.10: Matriz Formal de Requisitos No Funcionales (RNF-01 a RNF-08)", [0.8, 1.6, 1.8, 2.3])
     
     add_section_heading(doc, "2.5 Propiedades Formales del Entorno Operativo Clínico", level=2)
     add_body_p(
