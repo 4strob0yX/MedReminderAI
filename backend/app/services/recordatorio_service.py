@@ -14,8 +14,13 @@ from app.schemas.recordatorio import (
     AdherenciaMedicamentoOut,
     BloqueMapaCalorOut,
     DiaMapaCalorOut,
+    EscudoActivarResponse,
     EstadisticasOut,
 )
+
+
+class EscudoNoDisponibleError(Exception):
+    pass
 
 HORIZONTE_DIAS = 7  # Proyección continua de 7 días
 VENTANA_TOLERANCIA_HORAS = 2  # Vencimiento automático de pendientes tras 2 horas
@@ -406,6 +411,14 @@ def esta_posponer_bloqueado(
     ) = _calcular_racha_y_castigo(
         list(recs_meds), list(hist_meds), ahora, tz_offset_minutes
     )
+    if posponer_bloqueado:
+        delta_tz = timedelta(minutes=tz_offset_minutes)
+        hoy_local = (ahora + delta_tz).date()
+        escudo_fecha = db.scalar(
+            select(Usuario.escudo_usado_fecha).where(Usuario.id_usuario == id_usuario)
+        )
+        if escudo_fecha is not None and 0 <= (hoy_local - escudo_fecha).days <= 2:
+            return False
     return posponer_bloqueado
 
 
@@ -462,6 +475,22 @@ def calcular_estadisticas_usuario(
         critico_omitido_nombre,
     ) = _calcular_racha_y_castigo(recs_meds, hist_meds, ahora, tz_offset_minutes)
 
+    delta_tz = timedelta(minutes=tz_offset_minutes)
+    hoy_local: date = (ahora + delta_tz).date()
+
+    # Descontar escudos consumidos y aplicar protección si hay un escudo activo recientemente
+    escudos_usados = int(getattr(user, "escudos_usados_total", 0) or 0)
+    escudos_racha = max(0, escudos_racha - escudos_usados)
+    escudo_fecha = getattr(user, "escudo_usado_fecha", None)
+    escudo_activo_hoy = bool(escudo_fecha is not None and escudo_fecha == hoy_local)
+    if escudo_fecha is not None and 0 <= (hoy_local - escudo_fecha).days <= 2:
+        posponer_bloqueado = False
+        emblema_agrietado = False
+        if racha_dias == 0 and any(r.estado == "tomado" for r, _ in recs_meds):
+            racha_dias = 1
+            if color_fuego == "gris":
+                color_fuego = "naranja"
+
     # Contacto de apoyo principal para alerta al cuidador
     contacto_principal = db.scalars(
         select(ContactoApoyo)
@@ -488,9 +517,6 @@ def calcular_estadisticas_usuario(
             )
 
     # Adherencia semanal (últimos 7 días locales incluyendo hoy)
-    delta_tz = timedelta(minutes=tz_offset_minutes)
-    hoy_local: date = (ahora + delta_tz).date()
-
     por_fecha_local: dict[date, list[Recordatorio]] = {}
     for rec, _med in recs_meds:
         f_local = (rec.hora_programada + delta_tz).date()
@@ -654,4 +680,54 @@ def calcular_estadisticas_usuario(
         adherencia_por_medicamento=adherencia_por_medicamento,
         mapa_calor=mapa_calor,
         insight_debilidad=insight_debilidad,
+        escudo_activo_hoy=escudo_activo_hoy,
+        escudo_usado_fecha=escudo_fecha.isoformat() if escudo_fecha is not None else None,
+    )
+
+
+def activar_escudo_racha(
+    db: Session,
+    user: Usuario,
+    tz_offset_minutes: int = 0,
+    ahora: datetime | None = None,
+) -> EscudoActivarResponse:
+    """Consume 1 escudo protector ganado para blindar la racha y desbloquear posponer hoy."""
+    if ahora is None:
+        ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    stats = calcular_estadisticas_usuario(
+        db=db, user=user, tz_offset_minutes=tz_offset_minutes, ahora=ahora
+    )
+    delta_tz = timedelta(minutes=tz_offset_minutes)
+    hoy_local = (ahora + delta_tz).date()
+
+    if stats.escudo_activo_hoy:
+        return EscudoActivarResponse(
+            escudo_activado=True,
+            escudos_racha=stats.escudos_racha,
+            escudo_usado_fecha=hoy_local.isoformat(),
+            mensaje="El Escudo Protector ya está activo para el día de hoy.",
+        )
+
+    if stats.escudos_racha <= 0:
+        raise EscudoNoDisponibleError(
+            "No tienes escudos disponibles. Completa 7 días de racha para ganar uno."
+        )
+
+    user.escudos_usados_total = int(getattr(user, "escudos_usados_total", 0) or 0) + 1
+    user.escudo_usado_fecha = hoy_local
+    db.commit()
+    db.refresh(user)
+
+    registrar_evento_mongo(
+        evento="escudo_racha_activado",
+        id_usuario=user.id_usuario,
+        detalle={"fecha_local": hoy_local.isoformat()},
+    )
+
+    return EscudoActivarResponse(
+        escudo_activado=True,
+        escudos_racha=max(0, stats.escudos_racha - 1),
+        escudo_usado_fecha=hoy_local.isoformat(),
+        mensaje="Escudo Protector activado. Tu racha ha quedado blindada por hoy.",
     )

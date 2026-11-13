@@ -1,0 +1,5 @@
+id_paciente,edad,medicamentos_activos,adherencia_historica_pct,retraso_promedio_min,tiene_cuidador,riesgo_abandono,motivo_rechazo
+PAC-1003_OLD,165,3.0,92.7,84.5,1,0,Outlier biológico: Edad fuera de rango (165 años)
+PAC-1008_OLD,39,1.0,135.0,85.6,0,1,Error de cálculo: Adherencia anormal (135.0%)
+PAC-1013_OLD,19,2.0,40.4,-25.0,0,0,Inconsistencia temporal: Retraso negativo (-25.0 min)
+PAC-1019_OLD,39,,95.6,68.2,0,0,Campos obligatorios en blanco / nulos

@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Product Backlog Oficial - MedReminder AI | UTVT</title>
+<style>
+  @page {
+    size: letter;
+    margin: 1.4cm 1.4cm 1.4cm 1.4cm;
+  }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.35;
+    color: #282C34;
+    background-color: #FFFFFF;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* --- PORTADA INSTITUCIONAL UTVT --- */
+  .cover-page {
+    min-height: 880px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: center;
+    page-break-after: always;
+    padding: 10px 0;
+  }
+  .cover-logos {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+  }
+  .cover-logos img.utvt {
+    height: 65px;
+    width: auto;
+  }
+  .cover-logos img.edomex {
+    height: 52px;
+    width: auto;
+  }
+  .cover-institution {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1B365D;
+    line-height: 1.3;
+  }
+  .cover-direction {
+    font-size: 10pt;
+    font-weight: bold;
+    color: #0E8074;
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+  .cover-program {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #475569;
+    margin-top: 10px;
+  }
+  .cover-program-name {
+    font-size: 10.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    margin-top: 3px;
+  }
+  .cover-section-title {
+    margin-top: 35px;
+  }
+  .cover-label {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #64748B;
+    letter-spacing: 0.5px;
+  }
+  .cover-job-title {
+    font-size: 13.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+  .cover-job-sub {
+    font-size: 10.5pt;
+    color: #0E8074;
+    font-weight: bold;
+    margin-top: 4px;
+  }
+  .cover-meta {
+    margin-top: 25px;
+  }
+  .cover-meta-item {
+    margin-bottom: 12px;
+  }
+  .cover-meta-val {
+    font-size: 10.5pt;
+    color: #1E293B;
+  }
+  .cover-team {
+    margin-top: 18px;
+    text-align: left;
+    display: inline-block;
+    font-size: 9.5pt;
+    line-height: 1.5;
+  }
+  .cover-team-line {
+    font-family: monospace;
+    font-size: 9pt;
+  }
+  .cover-footer {
+    margin-top: 25px;
+    font-size: 9pt;
+    font-weight: bold;
+    color: #64748B;
+    text-align: center;
+  }
+
+  /* --- PÁGINAS Y CONTENEDORES --- */
+  .page {
+    page-break-after: always;
+  }
+  .page-last {
+    page-break-after: avoid;
+  }
+  h1 {
+    font-size: 12.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    border-bottom: 2px solid #0E8074;
+    padding-bottom: 4px;
+    margin: 18px 0 10px 0;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  h2 {
+    font-size: 10.5pt;
+    font-weight: bold;
+    color: #0E8074;
+    margin: 12px 0 4px 0;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  p {
+    margin: 0 0 8px 0;
+    text-align: justify;
+  }
+  ul {
+    margin: 0 0 8px 0;
+    padding-left: 18px;
+  }
+  li {
+    margin-bottom: 4px;
+    text-align: justify;
+  }
+
+  /* Contenedor de Épica que NUNCA se corta */
+  .epic-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 16px;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background-color: #FFFFFF;
+  }
+  .epic-card h2 {
+    margin-top: 0;
+    font-size: 10.5pt;
+    color: #1B365D;
+    border-bottom: 1.5px solid #0E8074;
+    padding-bottom: 3px;
+  }
+
+  /* Tablas de Backlog protegidas */
+  table.clean-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 2px 0;
+    font-size: 8pt;
+  }
+  table.clean-table thead {
+    display: table-header-group;
+  }
+  table.clean-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  table.clean-table th {
+    background-color: #1B365D;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 6px 8px;
+    text-align: left;
+    border: 1px solid #1B365D;
+  }
+  table.clean-table td {
+    padding: 6px 8px;
+    border: 1px solid #CBD5E1;
+    vertical-align: top;
+    line-height: 1.2;
+  }
+  table.clean-table tr:nth-child(even) {
+    background-color: #F8FAFC;
+  }
+  .badge-must {
+    background-color: #DCFCE7;
+    color: #166534;
+    font-weight: bold;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .badge-should {
+    background-color: #E0F2FE;
+    color: #0369A1;
+    font-weight: bold;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .badge-could {
+    background-color: #FEF3C7;
+    color: #B45309;
+    font-weight: bold;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  /* Cajas de llamada */
+  .callout {
+    background-color: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-left: 5px solid #1B365D;
+    border-radius: 4px;
+    padding: 9px 12px;
+    margin: 10px 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .callout-teal {
+    background-color: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-left: 5px solid #0E8074;
+    border-radius: 4px;
+    padding: 9px 12px;
+    margin: 10px 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .callout-title {
+    font-weight: bold;
+    font-size: 9.5pt;
+    color: #1B365D;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========================================== -->
+<!-- PORTADA OFICIAL UTVT                       -->
+<!-- ========================================== -->
+<div class="cover-page">
+  <div class="cover-logos">
+    <img src="file:///Users/4strob0y/Developer/MedReminderAI/docs/logo_utvt.png" class="utvt" alt="UTVT">
+    <img src="file:///Users/4strob0y/Developer/MedReminderAI/docs/logo_edomex.png" class="edomex" alt="EDOMEX">
+  </div>
+
+  <div>
+    <div class="cover-institution">UNIVERSIDAD TECNOLÓGICA DEL VALLE DE TOLUCA</div>
+    <div class="cover-direction">DIRECCIÓN DE CARRERA DE TECNOLOGÍAS DE LA INFORMACIÓN Y COMUNICACIÓN</div>
+    <div class="cover-program">PROGRAMA EDUCATIVO</div>
+    <div class="cover-program-name">INGENIERÍA EN TECNOLOGÍAS DE LA INFORMACIÓN E INNOVACIÓN DIGITAL</div>
+  </div>
+
+  <div class="cover-section-title">
+    <div class="cover-label">NOMBRE DEL TRABAJO:</div>
+    <div class="cover-job-title">PRODUCT BACKLOG INTEGRAL Y HISTORIAL DE DESARROLLO</div>
+    <div class="cover-job-sub">Proyecto: MedReminder AI (Recordatorio y Gestión de Medicamentos)</div>
+  </div>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-label">ASIGNATURA:</div>
+      <div class="cover-meta-val" style="font-weight:bold; color:#0E8074;">Formulación de Proyectos de Tecnología</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-label">NOMBRE DEL DOCENTE:</div>
+      <div class="cover-meta-val" style="font-weight:bold; color:#1B365D;">I.C. Héctor Pérez Paulín</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cover-label" style="text-align: center; margin-bottom: 6px;">PRESENTA:</div>
+    <div style="text-align: center;">
+      <div class="cover-team">
+        <div class="cover-team-line">222410897 &nbsp;–&nbsp; Gutiérrez Ugalde Samuel</div>
+        <div class="cover-team-line">222410935 &nbsp;–&nbsp; Nava García Rodrigo</div>
+        <div class="cover-team-line">222411182 &nbsp;–&nbsp; Castillo Ramírez Nahúm Yabet</div>
+        <div class="cover-team-line">222410915 &nbsp;–&nbsp; Ramírez Romero Pablo</div>
+        <div class="cover-team-line">222410899 &nbsp;–&nbsp; Peña Hernández Alexander</div>
+      </div>
+    </div>
+    <div style="margin-top: 14px; font-weight: bold; color: #1B365D; font-size: 10.5pt;">
+      GRUPO: ITIID - 73
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    SANTA MARÍA ATARASQUILLO, LERMA ESTADO DE MÉXICO. NOVIEMBRE 2026
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- SECCIÓN 1: INTRODUCCIÓN EQUILIBRADA        -->
+<!-- ========================================== -->
+<div class="page">
+  <h1>1. Introducción al Proyecto: Propósito y Problemática Atendida</h1>
+  
+  <p><b>Problemática identificada:</b> El proyecto atiende una situación recurrente en el entorno familiar: la dificultad que experimentan los adultos mayores y pacientes con tratamientos prolongados (tales como hipertensión arterial o diabetes) para mantener el control estricto de sus medicamentos. Con frecuencia surgen omisiones involuntarias o tomas duplicadas por falta de certeza sobre si la dosis ya fue ingerida, lo que representa un riesgo para la estabilidad de la salud.</p>
+
+  <ul>
+    <li><b>Desorganización en el botiquín doméstico:</b> En muchos hogares coexisten varios tratamientos simultáneos sobre la mesa. La similitud entre cajas y frascos incrementa la probabilidad de confusiones en horarios y dosis.</li>
+    <li><b>Limitaciones de aplicaciones existentes:</b> Tras analizar alternativas disponibles en tiendas móviles, se detectaron barreras importantes: saturación de publicidad invasiva que desorienta a personas mayores, modelos de cobro periódico en moneda extranjera y falta de fiabilidad en alarmas cuando el móvil entra en reposo o carece de conexión a internet.</li>
+    <li><b>Incertidumbre en el núcleo familiar:</b> Los familiares a cargo experimentan inquietud constante por verificar si el paciente tomó su medicamento oportunamente, lo que suele derivar en llamadas reiteradas y pérdida de autonomía del paciente.</li>
+  </ul>
+
+  <div class="callout-teal">
+    <div class="callout-title">Objetivo del Proyecto MedReminder AI</div>
+    Desarrollar una solución móvil accesible, privada y altamente confiable que asegure la activación puntual de alarmas visuales y acústicas aun con el dispositivo bloqueado o sin conexión a internet, incorpore asistencia de Inteligencia Artificial local para interpretar recetas mediante fotografía sin costos recurrentes, descuente existencias del botiquín y emita alertas automáticas al cuidador ante retrasos significativos.
+  </div>
+
+  <h1>2. Metodología de Trabajo y Organización del Backlog</h1>
+  <p>Con el objetivo de coordinar el desarrollo de manera estructurada y eficiente, el equipo implementó principios de metodologías ágiles basadas en Scrum:</p>
+  <ul>
+    <li><b>El Backlog como herramienta viva:</b> La pila de trabajo no permaneció estática; se refinó y ajustó periódicamente tras validar cada incremento en dispositivos físicos reales, incorporando mejoras detectadas durante las pruebas.</li>
+    <li><b>Rol del Product Owner:</b> El compañero Rodrigo Nava García asumió la responsabilidad de Product Owner, priorizando las necesidades clínicas y de accesibilidad del paciente sobre requerimientos secundarios o meramente visuales.</li>
+    <li><b>Estructura canónica de Historias de Usuario:</b> Cada funcionalidad fue descrita bajo el formato estándar de Mike Cohn: <i>'Como [rol], quiero [función], para [beneficio tangible]'</i>, asegurando que cada tarea aporte valor verificable al usuario.</li>
+    <li><b>Criterios de Aceptación (Definition of Done):</b> Ninguna historia se dio por concluida hasta verificar su funcionamiento en un dispositivo Android real, comprobar la persistencia de datos y asegurar su operatividad fuera de línea.</li>
+    <li><b>Priorización MoSCoW y Estimación:</b> Las historias se clasificaron en Must (indispensables), Should (importantes), Could (deseables) y Won't (proyectadas a futuro), asignando puntos de esfuerzo relativo en escala Fibonacci simplificada (1 a 8 puntos).</li>
+  </ul>
+</div>
+
+<!-- ========================================== -->
+<!-- SECCIÓN 3: EL PRODUCT BACKLOG COMPLETO    -->
+<!-- ========================================== -->
+<div>
+  <h1 style="margin: 20px 0 10px 0;">3. Product Backlog Completo de MedReminder AI</h1>
+  <p style="margin-bottom: 14px;">A continuación se presentan las 10 Épicas y las 30 Historias de Usuario estructuradas que componen el proyecto, acompañadas de sus criterios de aceptación y estimación de esfuerzo:</p>
+
+  <div class="epic-card">
+    <h2>Épica 1: Infraestructura Base, Servicios Docker y Red Local</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Configurar los contenedores de base de datos y backend para un despliegue ágil, asegurando la comunicación entre la aplicación móvil y el servidor tanto en la universidad como en entornos domésticos.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-01</td>
+          <td><b>Contenedores Docker para API y Base de Datos</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> equipo de desarrollo,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> iniciar el servidor FastAPI y la base de datos MySQL con un solo comando ('docker compose up -d'),<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> mantener el mismo entorno de ejecución en todas las computadoras del equipo y evitar fallas de configuración manual.
+          </td>
+          <td>El backend y MySQL inician en menos de 30 segundos con volumen persistente y puerto 8005 disponible.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-02</td>
+          <td><b>Estructuración de Base de Datos Relacional</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> desarrollador de backend,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> definir tablas normalizadas para usuarios, medicamentos, tratamientos y recordatorios con integridad referencial,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> almacenar la información médica de forma segura, evitando registros huérfanos o datos duplicados.
+          </td>
+          <td>El script SQL inicializa las tablas con llaves foráneas y tipos de datos validados.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-03</td>
+          <td><b>Detección Dinámica de Red y Fallback de IP</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> estudiante que prueba la app en el aula y en casa,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que la app Android detecte automáticamente la dirección IP del servidor según la red conectada (WiFi escolar, hotspot o red local),<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> evitar modificar la configuración de red y recompilar el proyecto cada vez que cambiamos de espacio de trabajo.
+          </td>
+          <td>Sondeo de conectividad con timeout rápido (400 ms) y conmutación automática sin cierre inesperado.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 2: Autenticación, Seguridad y Perfiles de Usuario</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Asegurar el acceso confiable al sistema, proteger los datos médicos del paciente y habilitar la vinculación entre el usuario y su familiar cuidador.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-04</td>
+          <td><b>Registro de Paciente con Fecha de Nacimiento</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> usuario nuevo,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> registrarme indicando mi fecha de nacimiento,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> que el sistema determine mi rango de edad y adapte automáticamente el tamaño de letra, botones y tolerancia de alarmas.
+          </td>
+          <td>Cálculo automático de grupo etario al registrarse (jóvenes, adultos o adultos mayores >60 años).</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-05</td>
+          <td><b>Inicio de Sesión Seguro con JWT y Contraseñas Cifradas</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente registrado,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> iniciar sesión con mi correo electrónico y contraseña,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> proteger mi expediente médico y asegurar que solo personas autorizadas puedan consultar mis medicamentos.
+          </td>
+          <td>Cifrado seguro mediante bcrypt y emisión de token JWT con vigencia definida.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-06</td>
+          <td><b>Diferenciación de Roles: Paciente y Familiar Cuidador</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> familiar a cargo del cuidado de un paciente,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> vincular mi cuenta como Cuidador responsable,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> dar seguimiento al cumplimiento de los medicamentos y recibir avisos inmediatos en caso de omisiones.
+          </td>
+          <td>Vinculación directa en base de datos con panel de supervisión de tomas en tiempo real.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 3: Gestión del Botiquín Virtual e Inventario Farmacológico</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Proporcionar al paciente un registro ordenado de los medicamentos disponibles en el hogar y prevenir desabastos mediante control de stock.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-07</td>
+          <td><b>Alta y Registro de Medicamentos en el Botiquín</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con tratamientos prescritos,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> registrar mis medicamentos indicando nombre, dosis, presentación (pastilla, jarabe, inyección) y unidades disponibles,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> mantener un catálogo digital organizado de todo el medicamento con el que cuento en casa.
+          </td>
+          <td>Formulario con selector visual de presentación y validación numérica de dosis y piezas.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-08</td>
+          <td><b>Autocompletado Predictivo de Nombres Farmacológicos</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente que desconoce la ortografía exacta de un fármaco,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> recibir sugerencias automáticas de nombres comunes (ej. Paracetamol, Metformina, Losartán) al escribir tres letras,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> agilizar el registro y evitar errores de escritura en sustancias médicas.
+          </td>
+          <td>Desplegable reactivo con catálogo base de medicamentos de uso frecuente en México.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-09</td>
+          <td><b>Descuento Automático de Inventario y Alerta de Stock Bajo</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente o cuidador,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que cada toma confirmada descuente una unidad del botiquín y me advierta cuando queden 3 pastillas o menos,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> adquirir el medicamento con anticipación en la farmacia y evitar la interrupción del tratamiento.
+          </td>
+          <td>Disminución atómica de stock y cambio visual a estado amarillo de advertencia.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 4: Programación de Tratamientos y Cronograma Diario ('Hoy')</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Calcular de manera precisa los horarios de toma a partir de la prescripción médica y ofrecer una vista diaria clara y cronológica.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-10</td>
+          <td><b>Cálculo Automático de Tomas según Frecuencia y Duración</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con prescripción médica,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> indicar la fecha de inicio, la frecuencia en horas (cada 8, 12 o 24 hrs) y los días de duración del tratamiento,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> que la aplicación genere todos los recordatorios del periodo sin tener que programar cada alarma individualmente.
+          </td>
+          <td>Generación consistente de registros con fecha y hora en base de datos sin duplicidades.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-11</td>
+          <td><b>Visualización del Cronograma Diario en Pantalla 'Hoy'</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente al iniciar el día,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> ver una lista ordenada por horario con los medicamentos programados únicamente para la fecha actual,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> identificar con rapidez las dosis de la mañana, tarde y noche sin confusiones con días posteriores.
+          </td>
+          <td>Tarjetas informativas con nombre del medicamento, dosis, hora y estado (Pendiente, Tomada, Pospuesta).</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-12</td>
+          <td><b>Confirmación Inmediata de Toma Realizada</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> presionar un botón visible que registre la toma de mi dosis en un solo toque,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> dejar constancia de la toma oportuna y tener la certeza de no haber omitido ni duplicado la medicación.
+          </td>
+          <td>Actualización inmediata del estado a 'Tomada' en menos de 200 ms y descuento correspondiente en inventario.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 5: Alarmas Nativas de Alta Prioridad y Resiliencia Fuera de Línea</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Garantizar la activación puntual y acústica de la alarma independientemente del estado de bloqueo del móvil, modos de ahorro de energía o ausencia de internet.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-13</td>
+          <td><b>Disparo Determinista en Pantalla Completa (AlarmManager)</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con el teléfono bloqueado o guardado,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que la pantalla se encienda a pantalla completa con sonido y vibración a la hora exacta de la toma,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> escuchar y ver el recordatorio aun si el dispositivo se encuentra en modo de reposo profundo (Doze Mode).
+          </td>
+          <td>Implementación con AlarmManager exacto y Full-Screen Intent; activación en un rango menor a ±2 segundos.</td>
+          <td style="text-align: center;"><span class="badge-must">Crítica</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-14</td>
+          <td><b>Activación Prioritaria en Modo Silencio para Medicamentos Críticos</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con condiciones delicadas (hipertensión o diabetes),<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que los medicamentos clasificados como críticos suenen mediante el canal de alarma del sistema, aun con el móvil en silencio,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> evitar omitir una dosis vital por un descuido en la configuración de volumen del teléfono.
+          </td>
+          <td>Canal de audio USAGE_ALARM configurado para omitir restricciones de no molestar en dosis críticas.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-15</td>
+          <td><b>Operación Totalmente Fuera de Línea (Modo Offline)</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente en zonas con poca cobertura o sin datos móviles,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que todas las alarmas programadas sigan funcionando normalmente sin conexión a internet,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> mantener la seguridad del tratamiento sin depender del estado del servicio de red móvil.
+          </td>
+          <td>Almacenamiento y programación local determinista en el dispositivo Android.</td>
+          <td style="text-align: center;"><span class="badge-must">Crítica</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 6: Inteligencia Artificial Clínica Local y Escáner de Recetas Médicas</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Facilitar la captura de tratamientos mediante visión por computadora y ofrecer asistencia informativa sobre medicamentos preservando la privacidad del paciente.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-16</td>
+          <td><b>Asistente Virtual 'Medi Companion' con Modelo Local Ollama</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con dudas cotidianas sobre sus medicamentos,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> consultar al asistente Medi sobre el propósito general de un fármaco o si debe ingerirse con alimentos,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> obtener orientación preliminar comprensible sin consultar fuentes no verificadas en internet.
+          </td>
+          <td>Procesamiento local mediante el modelo afinado 'medi-clinico' en Ollama, sin envío de datos al exterior.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-17</td>
+          <td><b>Extracción de Prescripciones Médicas mediante Fotografía</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente o familiar con una receta médica impresa o manuscrita,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> capturar una fotografía de la receta para que la IA reconozca el fármaco, la concentración y la frecuencia indicada,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> simplificar la captura de tratamientos extensos y reducir errores al teclear nombres complejos.
+          </td>
+          <td>Modelo multimodal que procesa la imagen y devuelve los datos estructurados en formato JSON.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-18</td>
+          <td><b>Pantalla de Verificación y Corrección de Datos Escaneados</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> usuario precavido,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> revisar y editar la información detectada por la IA antes de confirmar el tratamiento,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> asegurar que los miligramos y horarios sean exactamente los indicados por el médico antes de programar las alarmas.
+          </td>
+          <td>Formulario precargado con campos totalmente editables previo a la confirmación de guardado.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 7: Seguridad Farmacológica: Alergias e Interacciones Medicamentosas</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Validar que los medicamentos registrados no generen reacciones adversas conocidas ni choquen de forma perjudicial entre sí.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-19</td>
+          <td><b>Registro y Validación de Alergias Medicamentosas</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con alergias conocidas (ej. Penicilinas o AINEs),<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> registrar mis sustancias contraindicadas en mi perfil médico,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> que la aplicación me alerte inmediatamente si intento agregar un fármaco que contenga componentes alérgenos.
+          </td>
+          <td>Verificación cruzada al dar de alta medicamentos con mensaje de advertencia y bloqueo preventivo.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-20</td>
+          <td><b>Detección de Contraindicaciones e Interacciones Cruzadas</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente polimedicado,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que el sistema revise si existen conflictos o efectos adversos conocidos entre los medicamentos activos,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> consultar oportunamente al médico tratante y prevenir intoxicaciones o pérdida de eficacia farmacológica.
+          </td>
+          <td>Evaluación con motor de lógica clínica y matrices de compatibilidad farmacológica implementadas en el backend.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 8: Adherencia Terapéutica, Adaptación Gerontológica y Red de Apoyo</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Fomentar la constancia en el paciente respetando sus tiempos y mantener comunicada a la familia ante situaciones imprevistas.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-21</td>
+          <td><b>Métricas de Cumplimiento: Racha de Días y Reconocimiento</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente que busca consolidar un hábito de salud,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> visualizar los días consecutivos con tomas cumplidas puntualmente,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> mantener la motivación y evaluar mi propio compromiso con el tratamiento.
+          </td>
+          <td>Incremento de racha diaria al completar el 100% de tomas y mensaje de felicitación por hitos.</td>
+          <td style="text-align: center;"><span class="badge-could">Could</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-22</td>
+          <td><b>Tolerancia Gerontológica y Flexibilidad de Posposición</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> adulto mayor con movilidad pausada,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> posponer la alarma hasta en dos ocasiones por 10 minutos sin recibir penalizaciones estrictas,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> preparar con calma el vaso con agua y el medicamento sin sentir presión apresurada del sistema.
+          </td>
+          <td>Ventana de tolerancia de 20 minutos con advertencias graduales antes de considerar la toma como omitida.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-23</td>
+          <td><b>Alertas Automáticas al Cuidador ante Omisiones Relevantes</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> familiar o cuidador responsable,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> recibir una alerta si el paciente supera el límite de posposiciones en una dosis crítica,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> comunicarme de inmediato o asistir al paciente antes de que se presente una descompensación clínica.
+          </td>
+          <td>Registro del evento en el panel de cuidador con hora, medicamento y estado de omisión.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-24</td>
+          <td><b>Acceso Directo a Contacto de Apoyo en Casos de Emergencia</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente que experimenta malestar repentino,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> disponer de un botón de emergencia visible en la pantalla principal para contactar a mi familiar vía llamada o mensaje,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> solicitar apoyo rápidamente sin navegar por menús complejos del dispositivo.
+          </td>
+          <td>Enlace directo mediante Intent nativo de llamada o WhatsApp hacia el contacto de apoyo asignado.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 9: Diseño Visual Accesible y Rendimiento a 60 FPS</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Ofrecer una interfaz con contraste adecuado, tipografía legible para personas con debilidad visual y una navegación fluida sin retrasos.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-25</td>
+          <td><b>Paleta Visual Clínica y Ergonomía Visual (Clinical Teal y Soft Mint)</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> usuario adulto mayor o persona con cansancio visual,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> fondos contrastantes y claros, botones con dimensiones amplias y texto de buen tamaño,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> leer la información cómodamente tanto en condiciones de iluminación diurna como nocturna.
+          </td>
+          <td>Implementación de la paleta médica oficial (#0E8074 y #1B365D), botones mínimos de 48dp y texto legible.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">3</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-26</td>
+          <td><b>Optimización de Consultas y Navegación Fluida a 60 FPS</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> usuario con un dispositivo Android de gama estándar,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> que la pantalla principal cargue ágilmente y las transiciones sean suaves,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> tener una experiencia de uso ágil y confiable sin sobrecalentar el equipo ni agotar la batería.
+          </td>
+          <td>Carga unificada del cronograma en una sola llamada de red y renderizado fluido en Jetpack Compose.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="epic-card">
+    <h2>Épica 10: Roadmap Tecnológico y Proyección a Futuro (Versión 2.0)</h2>
+    <p style="font-size: 8.5pt; color: #475569; margin: 2px 0 6px 0;"><b>Objetivo técnico de la épica:</b> Documentar las líneas de desarrollo previstas para la versión 2.0 y próximas iteraciones del proyecto.</p>
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th style="width: 8%; text-align: center;">ID</th>
+          <th style="width: 22%;">Historia de Usuario</th>
+          <th style="width: 36%;">Estructura Canónica (Como / Quiero / Para)</th>
+          <th style="width: 20%;">Criterios de Aceptación</th>
+          <th style="width: 7%; text-align: center;">Prior.</th>
+          <th style="width: 7%; text-align: center;">Pts.</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-27</td>
+          <td><b>Generación de Reporte Clínico en PDF para Consulta Médica</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente que asiste a consulta periódica en el sector salud (IMSS, ISSSTE o ISSEMYM),<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> exportar un resumen mensual en PDF con mis porcentajes de adherencia y registros de tomas,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> proporcionar al médico de cabecera información objetiva sobre la constancia de mi tratamiento.
+          </td>
+          <td>Generación de documento estructurado con gráficos de adherencia listo para imprimir o compartir.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-28</td>
+          <td><b>Integración con Pastillero Físico Automatizado (IoT con ESP32)</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> familiar de un paciente con deterioro cognitivo significativo,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> enlazar la app mediante Bluetooth con un dispensador físico que ilumine y libere únicamente el compartimento correspondiente,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> eliminar el riesgo de confusiones mecánicas entre distintos frascos de medicamento.
+          </td>
+          <td>Comunicación BLE entre la aplicación móvil y microcontrolador ESP32 con sensores de apertura.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-29</td>
+          <td><b>Confirmación Asistida por Voz ('Medi Voice')</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> paciente con dificultades motrices o artritis,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> confirmar mis tomas pronunciando comandos de voz simples hacia el asistente,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> registrar el cumplimiento sin depender de la interacción táctil fina en la pantalla.
+          </td>
+          <td>Reconocimiento de comandos de voz locales en español y confirmación de la toma registrada.</td>
+          <td style="text-align: center;"><span class="badge-should">Should</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">8</td>
+        </tr>
+
+        <tr>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">HU-30</td>
+          <td><b>Notificaciones Push Remotas en la Nube (Multi-dispositivo)</b></td>
+          <td>
+            <span style="color:#0E8074; font-weight:bold;">Como</span> cuidador que reside o labora en una ubicación distante,<br>
+            <span style="color:#1B365D; font-weight:bold;">quiero</span> recibir avisos críticos directamente en mi celular a través de notificaciones push en tiempo real,<br>
+            <span style="color:#16A34A; font-weight:bold;">para</span> mantener la supervisión del paciente aun cuando no nos encontremos en la misma vivienda.
+          </td>
+          <td>Integración con Firebase Cloud Messaging para entrega confiable de avisos de omisión.</td>
+          <td style="text-align: center;"><span class="badge-must">Must</span></td>
+          <td style="text-align: center; font-weight: bold; color: #1B365D;">5</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ========================================== -->
+<!-- SECCIÓN 4: RETOS TÉCNICOS Y SOLUCIONES     -->
+<!-- ========================================== -->
+<div class="page" style="page-break-before: always;">
+  <h1>4. Retos Técnicos y Soluciones Implementadas durante el Desarrollo</h1>
+  <p>Durante las pruebas de integración en dispositivos físicos se presentaron diversos retos técnicos que motivaron ajustes directos en el backlog. A continuación se documentan los cuatro casos más significativos:</p>
+
+  <h2>Caso 1: Ejecución precisa de alarmas en modo de reposo (Doze Mode)</h2>
+  <p>Inicialmente se utilizaron notificaciones locales estándar de Android. Aunque operaban correctamente durante el uso activo del teléfono, al dejar el dispositivo en reposo nocturno el sistema operativo retrasaba la notificación hasta 25 minutos con el fin de ahorrar batería.<br>
+  <b>Solución técnica en el Backlog:</b> Se incorporó la historia <b>HU-13</b> con prioridad 'Crítica'. Se sustituyeron las notificaciones convencionales por <code>AlarmManager</code> nativo con <code>setExactAndAllowWhileIdle()</code> y una Activity con Full-Screen Intent. Con esto se garantizó que la pantalla se active puntualmente a la hora programada aun con el teléfono en reposo profundo.</p>
+
+  <h2>Caso 2: Resolución dinámica de red local en laboratorios escolares</h2>
+  <p>En las instalaciones de la UTVT, la infraestructura de red asigna direcciones IP variables al alternar entre redes académicas, talleres o puntos de acceso móviles. Esto interrumpía la comunicación entre la app y el servidor local en la computadora portátil.<br>
+  <b>Solución técnica en el Backlog:</b> Se formuló la historia <b>HU-03</b> para dotar a la aplicación de un módulo de detección dinámica de subred. La app ejecuta un sondeo ágil con timeout de 400 ms entre direcciones IP predefinidas y establece conexión automática sin requerir ajustes manuales en el código.</p>
+
+  <h2>Caso 3: Integración de Inteligencia Artificial local preservando costos y privacidad</h2>
+  <p>Para la lectura de recetas médicas y la orientación clínica se evaluó el uso de servicios comerciales en la nube. No obstante, esto implicaba costos periódicos no viables y riesgos en la confidencialidad de datos personales de salud.<br>
+  <b>Solución técnica en el Backlog:</b> Se desarrollaron las historias <b>HU-16</b> y <b>HU-17</b> integrando <b>Ollama</b> de manera local con el modelo afinado <code>medi-clinico</code>. De este modo, el procesamiento de imágenes y consultas se realiza directamente en la infraestructura del equipo sin costos de API y garantizando que los datos no abandonen el entorno privado.</p>
+
+  <h2>Caso 4: Accesibilidad visual y ergonomía para adultos mayores</h2>
+  <p>El prototipo inicial empleaba contrastes intensos y colores fluorescentes. Durante las pruebas con personas adultas mayores se observó que dicha interfaz producía fatiga visual y dificultaba la lectura de textos pequeños.<br>
+  <b>Solución técnica en el Backlog:</b> A través de la historia <b>HU-25</b> se estandarizó una paleta visual basada en Clinical Teal (<code>#0E8074</code>) y Soft Mint, estableciendo botones táctiles con altura mínima de 48dp y tipografía de al menos 16sp para favorecer la interacción en personas con debilidad visual o movilidad reducida.</p>
+</div>
+
+<!-- ========================================== -->
+<!-- SECCIÓN 5: MÉTRICAS Y CONCLUSIONES        -->
+<!-- ========================================== -->
+<div class="page-last" style="page-break-before: always;">
+  <h1>5. Balance de Métricas y Estado Actual del Proyecto</h1>
+  <p>El avance global del proyecto respecto al esfuerzo estimado en el backlog se resume en los siguientes indicadores cuantitativos:</p>
+  
+  <table class="clean-table" style="font-size: 8.5pt; margin-bottom: 16px;">
+    <thead>
+      <tr>
+        <th style="width: 35%;">Métrica del Backlog</th>
+        <th style="width: 25%; text-align: center;">Resultado</th>
+        <th style="width: 40%;">Interpretación Práctica</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Total de Épicas Estructuradas</b></td>
+        <td style="text-align: center; font-weight: bold; color: #0E8074;">10 Épicas</td>
+        <td>Cobertura completa del ciclo de vida del sistema.</td>
+      </tr>
+      <tr>
+        <td><b>Total de Historias de Usuario</b></td>
+        <td style="text-align: center; font-weight: bold; color: #1B365D;">30 Historias</td>
+        <td>Formuladas con roles, funciones y criterios claros.</td>
+      </tr>
+      <tr>
+        <td><b>Historias Completadas y Validadas (Done)</b></td>
+        <td style="text-align: center; font-weight: bold; color: #16A34A;">26 Historias (86.7%)</td>
+        <td>Funcionales y comprobadas en dispositivos Android.</td>
+      </tr>
+      <tr>
+        <td><b>Historias Proyectadas a Futuro</b></td>
+        <td style="text-align: center; font-weight: bold; color: #B45309;">4 Historias (13.3%)</td>
+        <td>Roadmap definido para la versión 2.0.</td>
+      </tr>
+      <tr>
+        <td><b>Puntos de Historia Estimados</b></td>
+        <td style="text-align: center; font-weight: bold; color: #1B365D;">154 Puntos</td>
+        <td>Volumen global de esfuerzo calculado por el equipo.</td>
+      </tr>
+      <tr>
+        <td><b>Puntos Concluidos con Éxito</b></td>
+        <td style="text-align: center; font-weight: bold; color: #16A34A;">128 Puntos (83.1%)</td>
+        <td>Capacidad efectiva de desarrollo alcanzada en el periodo.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h1>6. Roadmap Tecnológico: Proyección para Versión 2.0</h1>
+  <ul>
+    <li><b>Dispensador Físico Inteligente (IoT con ESP32):</b> Diseño de un pastillero automatizado con microcontrolador ESP32 conectado por Bluetooth, el cual ilumina y libera mecánicamente únicamente la cavidad del medicamento programado.</li>
+    <li><b>Confirmación por Comandos de Voz ('Medi Voice'):</b> Módulo de interacción por voz que permita a pacientes con movilidad reducida o temblor en manos registrar tomas mediante frases naturales.</li>
+    <li><b>Exportación de Reportes Clínicos en PDF:</b> Generación de resúmenes mensuales estructurados con porcentajes de cumplimiento para facilitar el seguimiento médico en consultas periódicas.</li>
+    <li><b>Notificaciones Push Remotas Multi-dispositivo:</b> Integración de servicios en la nube para mantener informados en tiempo real a familiares que residen en ubicaciones lejanas.</li>
+  </ul>
+
+  <h1>7. Conclusiones y Aprendizajes del Equipo</h1>
+  <p>El desarrollo de MedReminder AI en el marco de la asignatura de Formulación de Proyectos de Tecnología aportó aprendizajes formativos sustanciales:</p>
+  <ul>
+    <li><b>La formulación previa previene retrabajo técnico:</b> Contar con un backlog claro y criterios de aceptación definidos permitió que cada integrante comprendiera el alcance de sus tareas, reduciendo discrepancias y optimizando el tiempo de desarrollo.</li>
+    <li><b>Diseño enfocado en las necesidades reales del usuario:</b> En aplicaciones orientadas a la salud, la prioridad técnica radica en la confiabilidad de las alarmas y la sencillez operativa, adaptando la tecnología a las capacidades del paciente.</li>
+    <li><b>Cumplimiento de objetivos del proyecto:</b> Se alcanzó un 86.7% de historias completadas y validadas en dispositivos reales, consolidando una base técnica funcional con un plan claro de crecimiento para futuras etapas.</li>
+  </ul>
+</div>
+
+</body>
+</html>

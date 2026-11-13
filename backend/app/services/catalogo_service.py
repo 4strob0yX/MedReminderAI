@@ -104,7 +104,7 @@ CATALOGO_CLINICO: list[MedicamentoCatalogoItem] = [
     ),
     MedicamentoCatalogoItem(
         nombre="Losartán 50 mg",
-        principio_activo="Losartán",
+        principio_activo="Losartán potásico",
         familia="Antagonistas ARA-II",
         dosis_sugerida="50 mg",
         forma_farmaceutica="Comprimidos / Cápsulas",

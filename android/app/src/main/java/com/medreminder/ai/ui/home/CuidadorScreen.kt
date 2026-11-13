@@ -14,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,8 +39,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessAlarm
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HealthAndSafety
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Person
@@ -50,16 +54,21 @@ import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,6 +106,7 @@ import com.medreminder.ai.ui.theme.TextSecondary
  * Muestra el estado de adherencia en vivo del adulto mayor, alertas críticas enviadas
  * automáticamente, advertencias por posposición/omisión de medicamentos normales y bitácora de tomas.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CuidadorScreen(
     state: HomeUiState,
@@ -104,11 +114,17 @@ fun CuidadorScreen(
     onRefresh: () -> Unit,
     onAtenderAlerta: (Int) -> Unit,
     onSimularAlertaCritica: () -> Unit,
-    onCambiarRangoEdadDemo: (Boolean) -> Unit
+    onCambiarRangoEdadDemo: (Boolean) -> Unit,
+    onSeleccionarPaciente: (Int) -> Unit = {},
+    onVincularConPaciente: (codigo: String, parentesco: String?) -> Unit = { _, _ -> },
+    onEvaluarMlPaciente: () -> Unit = {}
 ) {
     val a11y = LocalAccessibilitySettings.current
     val context = LocalContext.current
     val panel = state.cuidadorPanel
+    var showVincularInline by remember { mutableStateOf(false) }
+    var codigoInline by remember { mutableStateOf("") }
+    var parentescoInline by remember { mutableStateOf("Familiar") }
     val alertasActivas = panel?.alertasActivas?.filter { !it.atendida } ?: emptyList()
     val tieneCriticaActiva = alertasActivas.any { it.esCritico || it.tipoAlerta == "critica_automatica" }
     val estadoRiesgo = panel?.estadoRiesgo ?: when {
@@ -197,6 +213,105 @@ fun CuidadorScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // 0. Selector Multi-Paciente y Vinculación por Código
+            if (state.pacientesVinculados.isNotEmpty() || panel?.pacienteVinculado == false || state.rolUsuario == "cuidador") {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = a11y.adaptiveCardSurface,
+                        border = BorderStroke(1.dp, a11y.adaptiveBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Link, contentDescription = null, tint = TealPrimary, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (state.pacientesVinculados.isEmpty()) "Vincular Paciente" else "Pacientes Supervisados (${state.pacientesVinculados.size})",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = a11y.adaptiveTextPrimary
+                                    )
+                                }
+                                TextButton(onClick = { showVincularInline = !showVincularInline }) {
+                                    Text(
+                                        text = if (showVincularInline) "Ocultar" else "+ Vincular código",
+                                        color = TealPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp
+                                    )
+                                }
+                            }
+
+                            if (state.pacientesVinculados.isNotEmpty()) {
+                                val currentId = panel?.idPaciente ?: state.selectedPacienteId
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    state.pacientesVinculados.forEach { pac ->
+                                        FilterChip(
+                                            selected = pac.idPaciente == currentId,
+                                            onClick = { onSeleccionarPaciente(pac.idPaciente) },
+                                            label = {
+                                                Text(
+                                                    text = if (pac.alertasNoAtendidas > 0) {
+                                                        "${pac.nombrePaciente} (${pac.alertasNoAtendidas})"
+                                                    } else {
+                                                        pac.nombrePaciente
+                                                    },
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (showVincularInline || (state.pacientesVinculados.isEmpty() && panel?.pacienteVinculado == false)) {
+                                OutlinedTextField(
+                                    value = codigoInline,
+                                    onValueChange = { codigoInline = it.uppercase().take(12) },
+                                    label = { Text("Código de vinculación del paciente") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                OutlinedTextField(
+                                    value = parentescoInline,
+                                    onValueChange = { parentescoInline = it },
+                                    label = { Text("Parentesco (ej. Hijo/a, Cuidador)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                Button(
+                                    onClick = {
+                                        onVincularConPaciente(codigoInline, parentescoInline)
+                                        codigoInline = ""
+                                        showVincularInline = false
+                                    },
+                                    enabled = codigoInline.trim().length >= 4,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Vincular Ahora", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 1. Tarjeta de Semáforo Clínico del Paciente Supervisado
             item {
                 Surface(
@@ -331,6 +446,48 @@ fun CuidadorScreen(
                                 color = if ((panel?.tomasCriticasOmitidasHoy ?: state.tomasCriticasOmitidasHoy) > 0) Color(0xFFB71C1C) else TextSecondary,
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        val evalMl = state.evaluacionMl
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = TealSoftBg,
+                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = TealPrimary, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (evalMl != null) {
+                                                "Riesgo ML de abandono: ${evalMl.nivelRiesgo} (${evalMl.probabilidadAbandonoPct.toInt()}%)"
+                                            } else {
+                                                "Predicción ML de abandono clínico"
+                                            },
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = TealDark
+                                        )
+                                    }
+                                    TextButton(onClick = onEvaluarMlPaciente) {
+                                        Text("Evaluar IA", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = TealPrimary)
+                                    }
+                                }
+                                if (evalMl != null) {
+                                    Text(
+                                        text = evalMl.recomendacionClinica,
+                                        fontSize = 11.5.sp,
+                                        color = a11y.adaptiveTextSecondary
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(Modifier.height(12.dp))

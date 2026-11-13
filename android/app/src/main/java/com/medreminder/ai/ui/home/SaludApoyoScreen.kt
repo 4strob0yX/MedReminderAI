@@ -1,7 +1,11 @@
 package com.medreminder.ai.ui.home
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +36,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContactPhone
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.HealthAndSafety
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Phone
@@ -47,6 +54,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,12 +99,17 @@ fun SaludApoyoScreenContent(
     onEliminarAlergia: (Int) -> Unit,
     onGuardarContacto: (Int?, String, String, String, String?, Boolean) -> Unit,
     onEliminarContacto: (Int) -> Unit,
-    onOpenVistaCuidador: () -> Unit = {}
+    onOpenVistaCuidador: () -> Unit = {},
+    onGenerarCodigoVinculacion: () -> Unit = {},
+    onVincularConPaciente: (codigo: String, parentesco: String?) -> Unit = { _, _ -> },
+    onRevocarVinculacion: (Int) -> Unit = {},
+    onSeleccionarPacienteCuidador: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val a11y = LocalAccessibilitySettings.current
     var showDialogAlergia by remember { mutableStateOf(false) }
     var showDialogContacto by remember { mutableStateOf(false) }
+    var contactoEnEdicion by remember { mutableStateOf<ContactoApoyoDto?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -209,10 +223,15 @@ fun SaludApoyoScreenContent(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (state.contactosApoyo.isNotEmpty()) {
-                    TextButton(onClick = { showDialogContacto = true }) {
-                        Text("Modificar", color = TealPrimary, fontWeight = FontWeight.Bold)
+                TextButton(
+                    onClick = {
+                        contactoEnEdicion = null
+                        showDialogContacto = true
                     }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = TealPrimary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Agregar", color = TealPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -259,7 +278,10 @@ fun SaludApoyoScreenContent(
                         )
                         Spacer(Modifier.height(16.dp))
                         Button(
-                            onClick = { showDialogContacto = true },
+                            onClick = {
+                                contactoEnEdicion = null
+                                showDialogContacto = true
+                            },
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
                         ) {
@@ -341,6 +363,20 @@ fun SaludApoyoScreenContent(
                                         color = a11y.adaptiveTextSecondary
                                     )
                                 }
+                            }
+                            IconButton(
+                                onClick = {
+                                    contactoEnEdicion = contacto
+                                    showDialogContacto = true
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Editar contacto",
+                                    tint = TealPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                             IconButton(
                                 onClick = { onEliminarContacto(contacto.idContacto) },
@@ -555,6 +591,22 @@ fun SaludApoyoScreenContent(
                 }
             }
         }
+
+        // --- SECCIÓN 3: VINCULACIÓN FAMILIAR / CUIDADOR EN RED ---
+        item {
+            Spacer(Modifier.height(10.dp))
+            VinculacionCuidadorCard(
+                state = state,
+                context = context,
+                onGenerarCodigo = onGenerarCodigoVinculacion,
+                onVincularConPaciente = onVincularConPaciente,
+                onRevocarVinculacion = onRevocarVinculacion,
+                onVerPanelPaciente = { idPac ->
+                    onSeleccionarPacienteCuidador(idPac)
+                    onOpenVistaCuidador()
+                }
+            )
+        }
     }
 
     // Modal para agregar Alergia
@@ -570,15 +622,231 @@ fun SaludApoyoScreenContent(
 
     // Modal para agregar/editar Contacto de Apoyo
     if (showDialogContacto) {
-        val contactoExistente = state.contactosApoyo.firstOrNull()
         DialogContacto(
-            contactoActual = contactoExistente,
-            onDismiss = { showDialogContacto = false },
+            contactoActual = contactoEnEdicion,
+            onDismiss = {
+                showDialogContacto = false
+                contactoEnEdicion = null
+            },
             onGuardar = { id, nom, tel, par, cor, prin ->
                 onGuardarContacto(id, nom, tel, par, cor, prin)
                 showDialogContacto = false
+                contactoEnEdicion = null
             }
         )
+    }
+}
+
+@Composable
+private fun VinculacionCuidadorCard(
+    state: HomeUiState,
+    context: Context,
+    onGenerarCodigo: () -> Unit,
+    onVincularConPaciente: (codigo: String, parentesco: String?) -> Unit,
+    onRevocarVinculacion: (Int) -> Unit,
+    onVerPanelPaciente: (Int) -> Unit
+) {
+    val a11y = LocalAccessibilitySettings.current
+    var codigoInput by remember { mutableStateOf("") }
+    var parentescoInput by remember { mutableStateOf("Familiar") }
+    val codigoActivo = state.ultimoCodigoGenerado
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.Link,
+                contentDescription = null,
+                tint = TealPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Vinculación de Red Familiar",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = a11y.adaptiveTextPrimary
+            )
+        }
+
+        // Subtarjeta Paciente -> Generar código 24h
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = a11y.adaptiveCardSurface,
+            border = BorderStroke(1.dp, a11y.adaptiveBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Compartir mi seguimiento con un cuidador",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = a11y.adaptiveTextPrimary
+                )
+                Text(
+                    text = "Genera un código válido por 24 horas para que tu familiar o médico supervise tus tomas y reciba alertas críticas.",
+                    fontSize = 12.5.sp,
+                    color = a11y.adaptiveTextSecondary
+                )
+
+                if (!codigoActivo.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = TealBadgeBg,
+                        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Key, contentDescription = null, tint = TealDark, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = codigoActivo,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TealDark
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    cm.setPrimaryClip(ClipData.newPlainText("Código MedReminder", codigoActivo))
+                                    Toast.makeText(context, "Código copiado: $codigoActivo", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text("Copiar", color = TealPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onGenerarCodigo,
+                    enabled = !state.cargandoVinculaciones,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (codigoActivo.isNullOrBlank()) "Generar código de vinculación" else "Generar nuevo código",
+                        color = TealPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                val cuidadores = state.vinculacionesResumen?.cuidadoresVinculados.orEmpty()
+                if (cuidadores.isNotEmpty()) {
+                    HorizontalDivider(color = a11y.adaptiveBorder)
+                    Text(
+                        text = "Cuidadores vinculados (${cuidadores.size}):",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = a11y.adaptiveTextSecondary
+                    )
+                    cuidadores.forEach { cv ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(cv.nombreCuidador, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = a11y.adaptiveTextPrimary)
+                                Text("${cv.parentesco ?: "Cuidador"} • ${cv.correoCuidador}", fontSize = 11.5.sp, color = a11y.adaptiveTextSecondary)
+                            }
+                            TextButton(onClick = { onRevocarVinculacion(cv.idVinculacion) }) {
+                                Text("Desvincular", color = AlertRedText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Subtarjeta Cuidador -> Canjear código de paciente
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = a11y.adaptiveCardSurface,
+            border = BorderStroke(1.dp, a11y.adaptiveBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Vincularme como cuidador de un paciente",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = a11y.adaptiveTextPrimary
+                )
+                OutlinedTextField(
+                    value = codigoInput,
+                    onValueChange = { codigoInput = it.uppercase().take(12) },
+                    label = { Text("Código del paciente (ej. MED-A1B2)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = parentescoInput,
+                    onValueChange = { parentescoInput = it },
+                    label = { Text("Parentesco / Rol (ej. Hijo/a, Enfermero)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Button(
+                    onClick = {
+                        onVincularConPaciente(codigoInput, parentescoInput)
+                        codigoInput = ""
+                    },
+                    enabled = codigoInput.trim().length >= 4 && !state.cargandoVinculaciones,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Vincular Paciente", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                if (state.pacientesVinculados.isNotEmpty()) {
+                    HorizontalDivider(color = a11y.adaptiveBorder)
+                    Text(
+                        text = "Pacientes bajo mi supervisión (${state.pacientesVinculados.size}):",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = a11y.adaptiveTextSecondary
+                    )
+                    state.pacientesVinculados.forEach { pac ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${pac.nombrePaciente} (${pac.edadPaciente} años)",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = a11y.adaptiveTextPrimary
+                                )
+                                Text(
+                                    text = "${pac.parentesco ?: "Familiar"} • Alertas: ${pac.alertasNoAtendidas}",
+                                    fontSize = 11.5.sp,
+                                    color = a11y.adaptiveTextSecondary
+                                )
+                            }
+                            TextButton(onClick = { onVerPanelPaciente(pac.idPaciente) }) {
+                                Text("Panel", color = TealPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            TextButton(onClick = { onRevocarVinculacion(pac.idVinculacion) }) {
+                                Text("Quitar", color = AlertRedText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -728,6 +996,7 @@ private fun DialogContacto(
     var telefono by remember { mutableStateOf(contactoActual?.telefono ?: "") }
     var parentesco by remember { mutableStateOf(contactoActual?.parentesco ?: "Familiar / Cuidador") }
     var correo by remember { mutableStateOf(contactoActual?.correo ?: "") }
+    var esPrincipal by remember { mutableStateOf(contactoActual?.esPrincipal ?: true) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -804,6 +1073,32 @@ private fun DialogContacto(
                     shape = RoundedCornerShape(14.dp)
                 )
 
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Contacto principal de emergencia",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Recibirá primero las alertas críticas automáticas",
+                            fontSize = 11.5.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = esPrincipal,
+                        onCheckedChange = { esPrincipal = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = TealPrimary)
+                    )
+                }
+
                 Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = {
@@ -814,7 +1109,7 @@ private fun DialogContacto(
                                 telefono.trim(),
                                 parentesco.trim(),
                                 correo.trim().ifBlank { null },
-                                true
+                                esPrincipal
                             )
                         }
                     },

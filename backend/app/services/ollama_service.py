@@ -702,6 +702,17 @@ def analizar_receta_ollama(
             )
 
     if not extracted:
+        if image_base64 and not texto_limpio and not vision_models:
+            return AiPrescriptionScanResponse(
+                medico="Lectura por imagen",
+                resumen_clinico=(
+                    "Se recibió la imagen de la receta, pero no se detectó texto OCR legible "
+                    "y no hay un modelo multimodal de visión activo en Ollama. Captura con mejor luz o edita el texto detectado."
+                ),
+                medicamentos=[],
+                model_used=chosen_model or "ocr-sin-texto",
+                using_ollama=False,
+            )
         extracted = [
             _enriquecer_item_receta(
                 {

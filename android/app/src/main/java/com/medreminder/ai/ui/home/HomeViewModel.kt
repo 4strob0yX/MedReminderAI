@@ -3,17 +3,26 @@ package com.medreminder.ai.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.medreminder.ai.data.remote.AiAdherencePredictRequestDto
 import com.medreminder.ai.data.remote.AiChatResponseDto
+import com.medreminder.ai.data.remote.AiEvaluarPacienteResponseDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
 import com.medreminder.ai.data.remote.CuidadorPanelResponseDto
+import com.medreminder.ai.data.remote.EstadisticasOutDto
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.data.remote.MedicamentoCreateDto
 import com.medreminder.ai.data.remote.MedicamentoDto
+import com.medreminder.ai.data.remote.PacienteVinculadoItemDto
 import com.medreminder.ai.data.remote.RecordatorioDto
+import com.medreminder.ai.data.remote.TorneoModelosResponseDto
 import com.medreminder.ai.data.remote.TratamientoDto
+import com.medreminder.ai.data.remote.VinculacionesResumenOutDto
 import com.medreminder.ai.data.repository.MedRepository
+import com.medreminder.ai.data.repository.OfflineQueuedException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +33,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -84,6 +94,9 @@ enum class StockNivel(val label: String) {
 
 data class BotiquinItemUi(
     val idMedicamento: Int,
+    val idTratamiento: Int? = null,
+    val tratamientoEstado: String? = null,
+    val frecuenciaHoras: Int = 8,
     val nombre: String,
     val principioActivo: String? = null,
     val dosis: String = "",
@@ -176,24 +189,44 @@ data class HomeUiState(
     val seniorPenaltyModal: SeniorPenaltyModalState? = null,
     val cuidadorPanel: CuidadorPanelResponseDto? = null,
     val cargandoPanelCuidador: Boolean = false,
+    val idUsuario: Int = 0,
+    val correoUsuario: String = "",
     val nombreUsuario: String = "Paciente",
     val fechaNacimiento: String = "1957-05-14",
     val edadUsuario: Int = 68,
     val esAdultoMayor: Boolean = true,
     val rangoEdad: String = "adulto_mayor",
     val rolUsuario: String = "paciente",
+    val fechaSeleccionadaIso: String = LocalDate.now().toString(),
+    val isSelectedDateToday: Boolean = true,
+    val isOfflineMode: Boolean = false,
+    val pendingSyncCount: Int = 0,
+    val isSyncingPending: Boolean = false,
     val fechaEncabezado: String = "",
     val tomasHoy: List<TomaHoyItemUi> = emptyList(),
     val tomasCompletadasCount: Int = 0,
     val vecesOmitidasHoy: Int = 0,
     val tomasCriticasOmitidasHoy: Int = 0,
-    val rachaDias: Int = 5,
-    val escudosRacha: Int = 2,
-    val puntosXp: Int = 340,
-    val rangoHonor: String = "Plata",
-    val progresoHonorPct: Int = 68,
+    val rachaDias: Int = 0,
+    val escudosRacha: Int = 0,
+    val escudoActivoHoy: Boolean = false,
+    val escudoUsadoFecha: String? = null,
+    val puntosXp: Int = 0,
+    val rangoHonor: String = "Hierro",
+    val progresoHonorPct: Int = 0,
     val castigoActivo: Boolean = false,
     val castigoPosponerBloqueado: Boolean = false,
+    val estadisticas: EstadisticasOutDto? = null,
+    val evaluacionMl: AiEvaluarPacienteResponseDto? = null,
+    val cargandoMl: Boolean = false,
+    val algoritmoMlSeleccionado: String = "random_forest",
+    val torneoModelos: TorneoModelosResponseDto? = null,
+    val pacientesVinculados: List<PacienteVinculadoItemDto> = emptyList(),
+    val selectedPacienteId: Int? = null,
+    val vinculacionesResumen: VinculacionesResumenOutDto? = null,
+    val cargandoVinculaciones: Boolean = false,
+    val ultimoCodigoGenerado: String? = null,
+    val isSavingProfile: Boolean = false,
     val modoTextoGrande: Boolean = false,
     val modoAltoContraste: Boolean = false,
     val botiquinItems: List<BotiquinItemUi> = emptyList(),
@@ -247,6 +280,82 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             (now - lastLoadedTime > 60_000L || _state.value.tomasHoy.isEmpty())
         ) {
             cargarDatos(silencioso = true)
+        } else if (tab == HomeTab.ANALISIS_DFS && _state.value.estadisticas == null) {
+            cargarDatos(silencioso = true)
+        } else if (tab == HomeTab.SALUD_APOYO && _state.value.vinculacionesResumen == null) {
+            cargarVinculaciones(silencioso = true)
+        }
+    }
+
+    fun onSelectFecha(fecha: LocalDate) {
+        val zone = ZoneId.systemDefault()
+        val hoy = LocalDate.now(zone)
+        _state.update {
+            it.copy(
+                fechaSeleccionadaIso = fecha.toString(),
+                isSelectedDateToday = (fecha == hoy),
+                fechaEncabezado = buildFechaEsp(fecha)
+            )
+        }
+        cargarDatos(silencioso = false)
+    }
+
+    fun onSyncPendingNow() {
+        if (_state.value.isSyncingPending) return
+        _state.update { it.copy(isSyncingPending = true) }
+        viewModelScope.launch {
+            val result = repository.syncPendingActions()
+            _state.update {
+                it.copy(
+                    isSyncingPending = false,
+                    pendingSyncCount = result.stillPending,
+                    isOfflineMode = result.hitNetworkError,
+                    snackbarMessage = when {
+                        result.syncedCount > 0 && result.stillPending == 0 ->
+                            "✓ ${result.syncedCount} acción(es) sincronizada(s) con el servidor"
+                        result.hitNetworkError ->
+                            "Sin conexión aún. Quedan ${result.stillPending} acción(es) en cola."
+                        result.stillPending == 0 ->
+                            "Todo al día con el servidor"
+                        else ->
+                            "${result.syncedCount} sincronizadas, ${result.stillPending} pendientes"
+                    }
+                )
+            }
+            if (result.syncedCount > 0) {
+                cargarDatos(silencioso = true)
+            }
+        }
+    }
+
+    fun onActivarEscudo() {
+        if (_state.value.isActionInFlight) return
+        _state.update { it.copy(isActionInFlight = true) }
+        viewModelScope.launch {
+            val tzOffset = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60
+            val res = repository.activarEscudo(tzOffsetMinutes = tzOffset)
+            res.fold(
+                onSuccess = { resp ->
+                    _state.update {
+                        it.copy(
+                            isActionInFlight = false,
+                            escudosRacha = resp.escudosRacha,
+                            escudoActivoHoy = resp.escudoActivado,
+                            escudoUsadoFecha = resp.escudoUsadoFecha,
+                            snackbarMessage = resp.mensaje
+                        )
+                    }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            isActionInFlight = false,
+                            snackbarMessage = err.message ?: "No se pudo activar el escudo de racha"
+                        )
+                    }
+                }
+            )
         }
     }
 
@@ -320,15 +429,26 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             val res = repository.tomarRecordatorio(toma.idRecordatorio)
             res.fold(
                 onSuccess = {
-                    _state.update { it.copy(isActionInFlight = false) }
+                    _state.update { it.copy(isActionInFlight = false, isOfflineMode = false) }
                     cargarDatos(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update { prev ->
-                        applyOptimisticStatus(prev, toma.idRecordatorio, "pendiente").copy(
-                            isActionInFlight = false,
-                            snackbarMessage = err.message ?: "No se pudo registrar la toma"
-                        )
+                    if (err is OfflineQueuedException) {
+                        _state.update {
+                            it.copy(
+                                isActionInFlight = false,
+                                isOfflineMode = true,
+                                pendingSyncCount = err.pendingCount,
+                                snackbarMessage = err.message
+                            )
+                        }
+                    } else {
+                        _state.update { prev ->
+                            applyOptimisticStatus(prev, toma.idRecordatorio, "pendiente").copy(
+                                isActionInFlight = false,
+                                snackbarMessage = err.message ?: "No se pudo registrar la toma"
+                            )
+                        }
                     }
                 }
             )
@@ -350,15 +470,26 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             val res = repository.tomarRecordatorio(idRecordatorio)
             res.fold(
                 onSuccess = {
-                    _state.update { it.copy(isActionInFlight = false) }
+                    _state.update { it.copy(isActionInFlight = false, isOfflineMode = false) }
                     cargarDatos(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update { prev ->
-                        applyOptimisticStatus(prev, idRecordatorio, "pendiente").copy(
-                            isActionInFlight = false,
-                            snackbarMessage = err.message ?: "No se pudo registrar la toma"
-                        )
+                    if (err is OfflineQueuedException) {
+                        _state.update {
+                            it.copy(
+                                isActionInFlight = false,
+                                isOfflineMode = true,
+                                pendingSyncCount = err.pendingCount,
+                                snackbarMessage = err.message
+                            )
+                        }
+                    } else {
+                        _state.update { prev ->
+                            applyOptimisticStatus(prev, idRecordatorio, "pendiente").copy(
+                                isActionInFlight = false,
+                                snackbarMessage = err.message ?: "No se pudo registrar la toma"
+                            )
+                        }
                     }
                 }
             )
@@ -388,22 +519,30 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
         _state.update { it.copy(isActionInFlight = true, snackbarMessage = null) }
         viewModelScope.launch {
-            // 1. Registrar omisión en backend (que también registra la alerta crítica en BD)
-            runCatching { repository.omitirRecordatorio(toma.idRecordatorio) }
-            // 2. Disparar explícitamente alerta crítica automática al panel del cuidador
-            runCatching {
-                repository.dispararAlertaCuidador(
-                    tipoAlerta = "critica_automatica",
-                    medicamentoNombre = toma.nombreMedicamento,
-                    dosis = dosisLimpia,
-                    accion = "omitir",
-                    esCritico = true,
-                    mensaje = msgCritico
-                )
+            // 1. Registrar omisión en backend (o encolar offline si no hay red)
+            val omitRes = repository.omitirRecordatorio(toma.idRecordatorio)
+            val queuedOffline = omitRes.exceptionOrNull() as? OfflineQueuedException
+            // 2. Intentar notificar al cuidador por API (si falla offline, el modal ofrece Llamar/SMS)
+            if (queuedOffline == null) {
+                runCatching {
+                    repository.dispararAlertaCuidador(
+                        tipoAlerta = "critica_automatica",
+                        medicamentoNombre = toma.nombreMedicamento,
+                        dosis = dosisLimpia,
+                        accion = "omitir",
+                        esCritico = true,
+                        mensaje = msgCritico
+                    )
+                }
             }
-            _state.update {
-                it.copy(
+            _state.update { prev ->
+                val updated = if (queuedOffline != null || omitRes.isSuccess) {
+                    applyOptimisticStatus(prev, toma.idRecordatorio, "omitido")
+                } else prev
+                updated.copy(
                     isActionInFlight = false,
+                    isOfflineMode = queuedOffline != null,
+                    pendingSyncCount = queuedOffline?.pendingCount ?: updated.pendingSyncCount,
                     selectedTomaForModal = null,
                     seniorPenaltyModal = SeniorPenaltyModalState(
                         isCriticalAutoSent = true,
@@ -415,12 +554,15 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         cuidadorTelefono = telCuidador,
                         mensajeAlerta = msgCritico
                     ),
-                    snackbarMessage = "🚨 Alerta crítica enviada automáticamente a $nombreCuidador",
-                    mediReaction = nextReaction(it, MediReactionKind.SKIPPED)
+                    snackbarMessage = queuedOffline?.message
+                        ?: "🚨 Alerta crítica enviada automáticamente a $nombreCuidador",
+                    mediReaction = nextReaction(prev, MediReactionKind.SKIPPED)
                 )
             }
-            cargarDatos(silencioso = true)
-            cargarPanelCuidador(silencioso = true)
+            if (queuedOffline == null) {
+                cargarDatos(silencioso = true)
+                cargarPanelCuidador(silencioso = true)
+            }
         }
     }
 
@@ -496,11 +638,33 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     if (esSenior) cargarPanelCuidador(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update {
-                        it.copy(
-                            isActionInFlight = false,
-                            snackbarMessage = err.message ?: "No se pudo posponer la toma"
-                        )
+                    if (err is OfflineQueuedException) {
+                        _state.update { prev ->
+                            val updatedTomas = prev.tomasHoy.map { item ->
+                                if (item.idRecordatorio == toma.idRecordatorio) {
+                                    item.copy(
+                                        estado = "pospuesto",
+                                        vecesPospuesto = item.vecesPospuesto + 1
+                                    )
+                                } else item
+                            }
+                            prev.copy(
+                                tomasHoy = updatedTomas,
+                                isActionInFlight = false,
+                                isOfflineMode = true,
+                                pendingSyncCount = err.pendingCount,
+                                selectedTomaForModal = null,
+                                snackbarMessage = err.message,
+                                mediReaction = nextReaction(prev, MediReactionKind.SNOOZED)
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                isActionInFlight = false,
+                                snackbarMessage = err.message ?: "No se pudo posponer la toma"
+                            )
+                        }
                     }
                 }
             )
@@ -546,6 +710,7 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     _state.update {
                         it.copy(
                             isActionInFlight = false,
+                            isOfflineMode = false,
                             selectedTomaForModal = null,
                             seniorPenaltyModal = penaltyModal,
                             snackbarMessage = if (esSenior) {
@@ -560,11 +725,24 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     if (esSenior) cargarPanelCuidador(silencioso = true)
                 },
                 onFailure = { err ->
-                    _state.update {
-                        it.copy(
-                            isActionInFlight = false,
-                            snackbarMessage = err.message ?: "No se pudo omitir la toma"
-                        )
+                    if (err is OfflineQueuedException) {
+                        _state.update { prev ->
+                            applyOptimisticStatus(prev, toma.idRecordatorio, "omitido").copy(
+                                isActionInFlight = false,
+                                isOfflineMode = true,
+                                pendingSyncCount = err.pendingCount,
+                                selectedTomaForModal = null,
+                                snackbarMessage = err.message,
+                                mediReaction = nextReaction(prev, MediReactionKind.SKIPPED)
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                isActionInFlight = false,
+                                snackbarMessage = err.message ?: "No se pudo omitir la toma"
+                            )
+                        }
                     }
                 }
             )
@@ -581,27 +759,20 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     _state.update {
                         it.copy(
                             isActionInFlight = false,
+                            isOfflineMode = false,
                             snackbarMessage = "Acción deshecha: la toma volvió a estado Pendiente"
                         )
                     }
                     cargarDatos(silencioso = true)
                 },
                 onFailure = { err ->
-                    // Si el backend aún no expone /revertir, revertimos localmente en UI para no bloquear al paciente
+                    val queued = err as? OfflineQueuedException
                     _state.update { prev ->
-                        val updatedTomas = prev.tomasHoy.map { item ->
-                            if (item.idRecordatorio == idRecordatorio) item.copy(estado = "pendiente") else item
-                        }
-                        val completadas = updatedTomas.count { it.estado == "tomado" }
-                        val omitidas = updatedTomas.count { it.estado == "omitido" }
-                        prev.copy(
+                        applyOptimisticStatus(prev, idRecordatorio, "pendiente").copy(
                             isActionInFlight = false,
-                            tomasHoy = updatedTomas,
-                            tomasCompletadasCount = completadas,
-                            vecesOmitidasHoy = omitidas,
-                            castigoActivo = omitidas > 0,
-                            castigoPosponerBloqueado = omitidas > 0,
-                            snackbarMessage = err.message ?: "Toma restaurada a pendiente"
+                            isOfflineMode = queued != null,
+                            pendingSyncCount = queued?.pendingCount ?: prev.pendingSyncCount,
+                            snackbarMessage = queued?.message ?: err.message ?: "Toma restaurada a pendiente"
                         )
                     }
                 }
@@ -665,6 +836,84 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     _state.update {
                         it.copy(snackbarMessage = err.message ?: "No se pudo eliminar el medicamento")
                     }
+                }
+            )
+        }
+    }
+
+    fun onEditarMedicamento(
+        idMedicamento: Int,
+        nombre: String,
+        principioActivo: String?,
+        dosis: String,
+        cantidadStock: Int,
+        forma: FormaFarmaceutica,
+        colorPastilla: String,
+        instruccionesToma: String?,
+        permitePosponer: Boolean,
+        esCritico: Boolean,
+        contraindicaciones: String?
+    ) {
+        if (nombre.isBlank()) return
+        val stockSanitized = cantidadStock.coerceAtLeast(0)
+        capacidadPorMedicamento[idMedicamento] = maxOf(capacidadPorMedicamento[idMedicamento] ?: 0, stockSanitized, 1)
+        metadatosLocalesMed[idMedicamento] = LocalMedMeta(
+            forma = forma,
+            colorPastilla = colorPastilla,
+            instruccionesToma = instruccionesToma.orEmpty(),
+            stockInicial = maxOf(stockSanitized, 1)
+        )
+        val body = MedicamentoCreateDto(
+            nombre = nombre.trim(),
+            principioActivo = principioActivo?.trim()?.ifBlank { null },
+            dosis = dosis.trim().ifBlank { "1 comprimido" },
+            cantidadStock = stockSanitized,
+            stockInicial = maxOf(capacidadPorMedicamento[idMedicamento] ?: stockSanitized, stockSanitized),
+            formaFarmaceutica = forma.apiKey,
+            colorPastilla = colorPastilla,
+            instruccionesToma = instruccionesToma?.trim()?.ifBlank { null },
+            permitePosponer = permitePosponer,
+            esCritico = esCritico,
+            contraindicaciones = contraindicaciones?.trim()?.ifBlank { null }
+        )
+        viewModelScope.launch {
+            val res = repository.actualizarMedicamento(idMedicamento, body)
+            res.fold(
+                onSuccess = { med ->
+                    _state.update { it.copy(snackbarMessage = "✓ ${med.nombre} actualizado") }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(snackbarMessage = err.message ?: "No se pudo actualizar el medicamento") }
+                }
+            )
+        }
+    }
+
+    fun onActualizarTratamiento(
+        idTratamiento: Int,
+        frecuenciaHoras: Int? = null,
+        estado: String? = null
+    ) {
+        viewModelScope.launch {
+            val res = repository.actualizarTratamiento(
+                idTratamiento = idTratamiento,
+                frecuenciaHoras = frecuenciaHoras,
+                estado = estado
+            )
+            res.fold(
+                onSuccess = { trat ->
+                    val msg = when {
+                        estado == "pausado" -> "Tratamiento pausado"
+                        estado == "activo" -> "✓ Tratamiento reanudado"
+                        frecuenciaHoras != null -> "Frecuencia actualizada a cada ${trat.frecuenciaHoras} h"
+                        else -> "Tratamiento actualizado"
+                    }
+                    _state.update { it.copy(snackbarMessage = msg) }
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(snackbarMessage = err.message ?: "No se pudo actualizar el tratamiento") }
                 }
             )
         }
@@ -1048,19 +1297,37 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     private fun calcularFechasTratamientoUtc(horaPrimeraToma: String, duracionDias: Int?): Pair<String?, String?> {
         return runCatching {
             val zone = ZoneId.systemDefault()
-            val hoy = LocalDate.now(zone)
-            val ldtLocal = when (horaPrimeraToma) {
-                "08:00 AM" -> hoy.atTime(8, 0)
-                "02:00 PM" -> hoy.atTime(14, 0)
-                "09:00 PM" -> hoy.atTime(21, 0)
-                else -> LocalDateTime.now(zone)
-            }
+            val ldtLocal = parseHoraPrimeraTomaLocal(horaPrimeraToma, zone)
             val inicioUtc = ldtLocal.atZone(zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
             val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
             val inicioStr = inicioUtc.format(fmt)
             val finStr = duracionDias?.let { inicioUtc.plusDays(it.toLong()).format(fmt) }
             inicioStr to finStr
         }.getOrDefault(null to null)
+    }
+
+    companion object {
+        internal fun parseHoraPrimeraTomaLocal(horaPrimeraToma: String, zone: ZoneId): LocalDateTime {
+            val raw = horaPrimeraToma.trim()
+            if (raw.isBlank() || raw.equals("Ahora", ignoreCase = true)) {
+                return LocalDateTime.now(zone)
+            }
+            val hoy = LocalDate.now(zone)
+            val formatters = listOf(
+                DateTimeFormatter.ofPattern("h:mm a", Locale.US),
+                DateTimeFormatter.ofPattern("hh:mm a", Locale.US),
+                DateTimeFormatter.ofPattern("H:mm", Locale.US),
+                DateTimeFormatter.ofPattern("HH:mm", Locale.US)
+            )
+            val upper = raw.uppercase(Locale.US)
+            for (formatter in formatters) {
+                val parsed = runCatching { LocalTime.parse(upper, formatter) }.getOrNull()
+                if (parsed != null) {
+                    return hoy.atTime(parsed)
+                }
+            }
+            return LocalDateTime.now(zone)
+        }
     }
 
     // --- Operaciones de Alergias ---
@@ -1307,7 +1574,10 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         viewModelScope.launch {
             val zoneLocal = ZoneId.systemDefault()
             val tzOffsetMinutes = zoneLocal.rules.getOffset(Instant.now()).totalSeconds / 60
-            val res = repository.obtenerPanelCuidador(tzOffsetMinutes = tzOffsetMinutes)
+            val res = repository.obtenerPanelCuidador(
+                tzOffsetMinutes = tzOffsetMinutes,
+                idPaciente = _state.value.selectedPacienteId
+            )
             res.fold(
                 onSuccess = { panel ->
                     _state.update {
@@ -1319,6 +1589,271 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                 },
                 onFailure = {
                     _state.update { it.copy(cargandoPanelCuidador = false) }
+                }
+            )
+        }
+    }
+
+    fun onSeleccionarPacienteCuidador(idPaciente: Int) {
+        _state.update { it.copy(selectedPacienteId = idPaciente) }
+        cargarPanelCuidador(silencioso = false)
+        onCargarEvaluacionMl(pacienteId = idPaciente, silencioso = true)
+    }
+
+    // --- Predictor Clínico ML de Abandono (Random Forest / Árbol / KNN + Torneo P05) ---
+
+    fun onCargarEvaluacionMl(
+        pacienteId: Int? = null,
+        algoritmo: String = _state.value.algoritmoMlSeleccionado,
+        silencioso: Boolean = false
+    ) {
+        val targetId = pacienteId
+            ?: _state.value.selectedPacienteId
+            ?: _state.value.cuidadorPanel?.idPaciente?.takeIf { it > 0 && _state.value.showVistaCuidador }
+            ?: _state.value.idUsuario
+
+        if (!silencioso) {
+            _state.update { it.copy(cargandoMl = true, algoritmoMlSeleccionado = algoritmo) }
+        }
+        viewModelScope.launch {
+            val res = if (targetId > 0) {
+                repository.evaluarPacienteMl(pacienteId = targetId, algoritmo = algoritmo)
+            } else {
+                val stats = _state.value.estadisticas
+                val adh = stats?.porcentajeGlobal ?: 100f
+                val activos = _state.value.botiquinItems.size
+                repository.predecirAdherenciaMl(
+                    request = AiAdherencePredictRequestDto(
+                        edad = _state.value.edadUsuario,
+                        medicamentosActivos = activos,
+                        adherenciaHistoricaPct = adh,
+                        retrasoPromedioMin = ((stats?.totalPospuestas ?: 0) * 15f).coerceAtLeast(0f),
+                        tieneCuidador = if (_state.value.contactosApoyo.isNotEmpty()) 1 else 0
+                    ),
+                    algoritmo = algoritmo
+                )
+            }
+            res.fold(
+                onSuccess = { eval ->
+                    _state.update {
+                        it.copy(
+                            cargandoMl = false,
+                            evaluacionMl = eval,
+                            algoritmoMlSeleccionado = algoritmo
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            cargandoMl = false,
+                            snackbarMessage = if (!silencioso) {
+                                err.message ?: "No se pudo evaluar el riesgo ML"
+                            } else it.snackbarMessage
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onCambiarAlgoritmoMl(algoritmo: String) {
+        _state.update { it.copy(algoritmoMlSeleccionado = algoritmo) }
+        onCargarEvaluacionMl(algoritmo = algoritmo, silencioso = false)
+    }
+
+    fun onCargarTorneoModelos() {
+        viewModelScope.launch {
+            repository.obtenerTorneoModelosMl().onSuccess { torneo ->
+                _state.update { it.copy(torneoModelos = torneo) }
+            }
+        }
+    }
+
+    // --- Vinculación Familiar / Cuidador (Código de 24h y Gestión de Vínculos) ---
+
+    fun cargarVinculaciones(silencioso: Boolean = true) {
+        if (!silencioso) {
+            _state.update { it.copy(cargandoVinculaciones = true) }
+        }
+        viewModelScope.launch {
+            val tzOffset = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60
+            val res = repository.obtenerResumenVinculaciones(tzOffsetMinutes = tzOffset)
+            res.fold(
+                onSuccess = { resumen ->
+                    _state.update { prev ->
+                        val nextSelectedId = when {
+                            prev.selectedPacienteId != null &&
+                                resumen.comoCuidador.any { it.idPaciente == prev.selectedPacienteId } ->
+                                prev.selectedPacienteId
+                            else -> resumen.comoCuidador.firstOrNull()?.idPaciente
+                        }
+                        prev.copy(
+                            cargandoVinculaciones = false,
+                            vinculacionesResumen = resumen,
+                            pacientesVinculados = resumen.comoCuidador,
+                            selectedPacienteId = nextSelectedId,
+                            ultimoCodigoGenerado = resumen.codigoActivo?.codigoVinculacion
+                                ?: prev.ultimoCodigoGenerado
+                        )
+                    }
+                },
+                onFailure = {
+                    _state.update { it.copy(cargandoVinculaciones = false) }
+                }
+            )
+        }
+    }
+
+    fun onGenerarCodigoVinculacion() {
+        _state.update { it.copy(cargandoVinculaciones = true) }
+        viewModelScope.launch {
+            val res = repository.generarCodigoVinculacion()
+            res.fold(
+                onSuccess = { codeDto ->
+                    _state.update {
+                        it.copy(
+                            cargandoVinculaciones = false,
+                            ultimoCodigoGenerado = codeDto.codigoVinculacion,
+                            snackbarMessage = "Código generado: ${codeDto.codigoVinculacion} (válido 24 h)"
+                        )
+                    }
+                    cargarVinculaciones(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            cargandoVinculaciones = false,
+                            snackbarMessage = err.message ?: "No se pudo generar el código"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onVincularConPaciente(codigo: String, parentesco: String? = null) {
+        val clean = codigo.trim().uppercase()
+        if (clean.length < 4) {
+            _state.update { it.copy(snackbarMessage = "Ingresa el código de vinculación") }
+            return
+        }
+        _state.update { it.copy(cargandoVinculaciones = true) }
+        viewModelScope.launch {
+            val tzOffset = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60
+            val res = repository.vincularConPaciente(
+                codigo = clean,
+                parentesco = parentesco,
+                tzOffsetMinutes = tzOffset
+            )
+            res.fold(
+                onSuccess = { vinculado ->
+                    _state.update {
+                        it.copy(
+                            cargandoVinculaciones = false,
+                            selectedPacienteId = vinculado.idPaciente,
+                            snackbarMessage = "✓ Vinculado con ${vinculado.nombrePaciente}"
+                        )
+                    }
+                    cargarVinculaciones(silencioso = true)
+                    cargarPanelCuidador(silencioso = false)
+                    onCargarEvaluacionMl(pacienteId = vinculado.idPaciente, silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            cargandoVinculaciones = false,
+                            snackbarMessage = err.message ?: "No se pudo vincular con el código"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onRevocarVinculacion(idVinculacion: Int) {
+        viewModelScope.launch {
+            val res = repository.revocarVinculacion(idVinculacion)
+            res.fold(
+                onSuccess = {
+                    _state.update { it.copy(snackbarMessage = "Vinculación desactivada") }
+                    cargarVinculaciones(silencioso = true)
+                    cargarPanelCuidador(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(snackbarMessage = err.message ?: "No se pudo desvincular") }
+                }
+            )
+        }
+    }
+
+    // --- Edición de Perfil y Cambio de Contraseña ---
+
+    fun onActualizarPerfil(
+        nombreCompleto: String,
+        fechaNacimiento: String,
+        rol: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        if (_state.value.isSavingProfile) return
+        _state.update { it.copy(isSavingProfile = true) }
+        viewModelScope.launch {
+            val res = repository.actualizarPerfilCompleto(
+                nombreCompleto = nombreCompleto,
+                fechaNacimiento = fechaNacimiento,
+                rol = rol
+            )
+            res.fold(
+                onSuccess = { perfil ->
+                    _state.update {
+                        it.copy(
+                            isSavingProfile = false,
+                            idUsuario = perfil.idUsuario,
+                            nombreUsuario = perfil.nombre?.takeIf { n -> n.isNotBlank() } ?: it.nombreUsuario,
+                            correoUsuario = perfil.email ?: it.correoUsuario,
+                            fechaNacimiento = perfil.fechaNacimiento ?: fechaNacimiento,
+                            edadUsuario = perfil.edad,
+                            esAdultoMayor = perfil.esAdultoMayor,
+                            rangoEdad = perfil.rangoEdad,
+                            rolUsuario = perfil.rol ?: rol,
+                            snackbarMessage = "✓ Perfil actualizado correctamente"
+                        )
+                    }
+                    onComplete(true)
+                    cargarDatos(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            isSavingProfile = false,
+                            snackbarMessage = err.message ?: "No se pudo actualizar el perfil"
+                        )
+                    }
+                    onComplete(false)
+                }
+            )
+        }
+    }
+
+    fun onCambiarPassword(
+        currentPassword: String,
+        newPassword: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        if (currentPassword.isBlank() || newPassword.length < 8) {
+            onResult(false, "La nueva contraseña debe tener mínimo 8 caracteres")
+            return
+        }
+        viewModelScope.launch {
+            val res = repository.cambiarPassword(currentPassword, newPassword)
+            res.fold(
+                onSuccess = { msg ->
+                    _state.update { it.copy(snackbarMessage = "✓ $msg") }
+                    onResult(true, msg)
+                },
+                onFailure = { err ->
+                    val errMsg = err.message ?: "No se pudo cambiar la contraseña"
+                    onResult(false, errMsg)
                 }
             )
         }
@@ -1436,13 +1971,32 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
         viewModelScope.launch {
             val zoneLocal = ZoneId.systemDefault()
-            val hoyLocal = LocalDate.now(zoneLocal).toString()
+            val selectedDate = runCatching { LocalDate.parse(_state.value.fechaSeleccionadaIso) }
+                .getOrElse { LocalDate.now(zoneLocal) }
+            val selectedIso = selectedDate.toString()
+            val hoyIso = LocalDate.now(zoneLocal).toString()
             val tzOffsetMinutes = zoneLocal.rules.getOffset(Instant.now()).totalSeconds / 60
 
-            val res = repository.cargarDashboard(
-                fechaUtc = hoyLocal,
-                tzOffsetMinutes = tzOffsetMinutes
-            )
+            // Si hay acciones pendientes en cola offline, intentamos sincronizarlas silenciosamente primero
+            if (repository.pendingSyncCount() > 0) {
+                runCatching { repository.syncPendingActions() }
+            }
+
+            val (res, statsRes) = coroutineScope {
+                val dashDeferred = async {
+                    repository.cargarDashboard(
+                        fechaUtc = selectedIso,
+                        tzOffsetMinutes = tzOffsetMinutes
+                    )
+                }
+                val statsDeferred = async {
+                    repository.obtenerEstadisticas(tzOffsetMinutes = tzOffsetMinutes)
+                }
+                dashDeferred.await() to statsDeferred.await()
+            }
+
+            val statsDto = statsRes.getOrNull() ?: repository.getLocalCachedEstadisticas()
+
             res.fold(
                 onSuccess = { bundle ->
                     val tomasUi = mapRecordatoriosToUi(
@@ -1450,12 +2004,12 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         tratamientos = bundle.tratamientos,
                         medicamentos = bundle.medicamentos
                     )
-                    val botiquinUi = mapMedicamentosToBotiquinUi(bundle.medicamentos)
+                    val botiquinUi = mapMedicamentosToBotiquinUi(bundle.medicamentos, bundle.tratamientos)
                     val completadas = tomasUi.count { it.estado == "tomado" }
                     val omitidas = tomasUi.count { it.estado == "omitido" }
                     val criticasOmitidas = tomasUi.count { it.estado == "omitido" && it.esCritico }
 
-                    // Estado de Botiquín vacío: 0% y 0 días (nunca 100% ni 6 días cuando no hay medicamentos)
+                    // Estado de Botiquín vacío: 0% y 0 días
                     val promedioGlobal = if (botiquinUi.isEmpty()) 0 else {
                         botiquinUi.map { it.porcentajeRestante }.average().toInt().coerceIn(0, 100)
                     }
@@ -1474,17 +2028,16 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         }.minOrNull() ?: 0
                     }
 
-                    // Cálculo de Racha estilo TikTok, Escudos y Rango de Honor
-                    val baseXp = 320 + (completadas * 30) - (omitidas * 55)
-                    val xpActual = baseXp.coerceAtLeast(40)
-                    val (rangoNombre, progresoPct) = calcularRangoHonor(xpActual)
-                    val rachaCalculada = when {
-                        omitidas > 0 -> 0 // Racha apagada por omisión no protegida
-                        completadas > 0 -> 7 + completadas // Evoluciona a fuego azul eléctrico
-                        else -> 5
-                    }
-                    val escudosDisp = if (omitidas > 0) 1 else 2
-                    val castigoActivo = omitidas > 0 || xpActual < 200
+                    // Estadísticas reales desde backend (o fallback neutral sin cifras inventadas)
+                    val xpActual = statsDto?.xpHonor
+                        ?: (completadas * 25 - omitidas * 45).coerceAtLeast(0)
+                    val (rangoNombreFallback, progresoPct) = calcularRangoHonor(xpActual)
+                    val rangoNombre = statsDto?.rangoHonor?.takeIf { it.isNotBlank() } ?: rangoNombreFallback
+                    val rachaCalculada = statsDto?.rachaDias
+                        ?: if (completadas > 0 && omitidas == 0) 1 else 0
+                    val escudosDisp = statsDto?.escudosRacha ?: 0
+                    val castigoActivo = statsDto?.emblemaAgrietado ?: (omitidas > 0)
+                    val posponerBloq = statsDto?.posponerBloqueado ?: (omitidas > 0)
 
                     val perfil = bundle.perfil
                     val edadActual = perfil?.edad ?: _state.value.edadUsuario
@@ -1496,24 +2049,33 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                     _state.update { prev ->
                         prev.copy(
                             isLoading = false,
+                            idUsuario = perfil?.idUsuario ?: prev.idUsuario,
+                            correoUsuario = perfil?.email ?: prev.correoUsuario,
                             nombreUsuario = bundle.nombreUsuario?.takeIf { it.isNotBlank() } ?: prev.nombreUsuario,
                             fechaNacimiento = fechaNac,
                             edadUsuario = edadActual,
                             esAdultoMayor = esSenior,
                             rangoEdad = rangoActual,
                             rolUsuario = rolActual,
-                            fechaEncabezado = buildFechaHoyEsp(),
+                            fechaSeleccionadaIso = selectedIso,
+                            isSelectedDateToday = (selectedIso == hoyIso),
+                            isOfflineMode = bundle.fromOfflineCache,
+                            pendingSyncCount = bundle.pendingSyncCount,
+                            fechaEncabezado = buildFechaEsp(selectedDate),
                             tomasHoy = tomasUi,
                             tomasCompletadasCount = completadas,
                             vecesOmitidasHoy = omitidas,
                             tomasCriticasOmitidasHoy = criticasOmitidas,
                             rachaDias = rachaCalculada,
                             escudosRacha = escudosDisp,
+                            escudoActivoHoy = statsDto?.escudoActivoHoy ?: false,
+                            escudoUsadoFecha = statsDto?.escudoUsadoFecha,
                             puntosXp = xpActual,
                             rangoHonor = rangoNombre,
                             progresoHonorPct = progresoPct,
                             castigoActivo = castigoActivo,
-                            castigoPosponerBloqueado = castigoActivo,
+                            castigoPosponerBloqueado = posponerBloq,
+                            estadisticas = statsDto ?: prev.estadisticas,
                             botiquinItems = botiquinUi,
                             porcentajeGlobalSuministros = promedioGlobal,
                             diasReposicionEstimada = diasReposicion,
@@ -1522,11 +2084,14 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
                         )
                     }
                     cargarPanelCuidador(silencioso = true)
+                    cargarVinculaciones(silencioso = true)
+                    onCargarEvaluacionMl(silencioso = true)
                 },
                 onFailure = { err ->
                     _state.update {
                         it.copy(
                             isLoading = false,
+                            pendingSyncCount = repository.pendingSyncCount(),
                             snackbarMessage = err.message
                         )
                     }
@@ -1537,10 +2102,10 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
     private fun calcularRangoHonor(xp: Int): Pair<String, Int> {
         return when {
-            xp < 200 -> "Hierro" to ((xp.coerceAtLeast(0) * 100) / 200).coerceIn(5, 100)
-            xp < 300 -> "Bronce" to (((xp - 200) * 100) / 100).coerceIn(5, 100)
-            xp < 450 -> "Plata" to (((xp - 300) * 100) / 150).coerceIn(5, 100)
-            xp < 650 -> "Oro" to (((xp - 450) * 100) / 200).coerceIn(5, 100)
+            xp < 100 -> "Hierro" to ((xp.coerceAtLeast(0) * 100) / 100).coerceIn(5, 100)
+            xp < 250 -> "Bronce" to (((xp - 100) * 100) / 150).coerceIn(5, 100)
+            xp < 500 -> "Plata" to (((xp - 250) * 100) / 250).coerceIn(5, 100)
+            xp < 900 -> "Oro" to (((xp - 500) * 100) / 400).coerceIn(5, 100)
             else -> "Diamante" to 100
         }
     }
@@ -1611,9 +2176,14 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
-    private fun mapMedicamentosToBotiquinUi(medicamentos: List<MedicamentoDto>): List<BotiquinItemUi> {
+    private fun mapMedicamentosToBotiquinUi(
+        medicamentos: List<MedicamentoDto>,
+        tratamientos: List<TratamientoDto> = emptyList()
+    ): List<BotiquinItemUi> {
         return medicamentos.map { med ->
             val stock = med.cantidadStock
+            val trat = tratamientos.firstOrNull { it.idMedicamento == med.idMedicamento && it.estado == "activo" }
+                ?: tratamientos.firstOrNull { it.idMedicamento == med.idMedicamento }
             val localMeta = metadatosLocalesMed[med.idMedicamento]
             val stockInicialDto = med.stockInicial ?: localMeta?.stockInicial
             val prevCap = capacidadPorMedicamento[med.idMedicamento]
@@ -1652,6 +2222,9 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
             BotiquinItemUi(
                 idMedicamento = med.idMedicamento,
+                idTratamiento = trat?.idTratamiento,
+                tratamientoEstado = trat?.estado,
+                frecuenciaHoras = trat?.frecuenciaHoras ?: 8,
                 nombre = med.nombre,
                 principioActivo = med.principioActivo,
                 dosis = med.dosis,
@@ -1682,11 +2255,12 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
-    private fun buildFechaHoyEsp(): String {
-        val hoy = LocalDate.now(ZoneId.systemDefault())
+    private fun buildFechaHoyEsp(): String = buildFechaEsp(LocalDate.now(ZoneId.systemDefault()))
+
+    private fun buildFechaEsp(fecha: LocalDate): String {
         val esLocale = Locale.forLanguageTag("es-ES")
         val formatter = DateTimeFormatter.ofPattern("EEEE, d 'de' MMM", esLocale)
-        val raw = hoy.format(formatter)
+        val raw = fecha.format(formatter)
         return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(esLocale) else it.toString() }
     }
 

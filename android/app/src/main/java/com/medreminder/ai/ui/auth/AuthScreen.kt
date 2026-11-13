@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,6 +63,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -128,7 +130,9 @@ fun AuthRoute(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
         onOpenResetPassword = viewModel::onOpenResetPassword,
         onCloseResetPassword = viewModel::onCloseResetPassword,
         onResetEmailChange = viewModel::onResetEmailChange,
+        onResetCodeChange = viewModel::onResetCodeChange,
         onResetNewPasswordChange = viewModel::onResetNewPasswordChange,
+        onRequestResetCode = viewModel::onRequestResetCode,
         onSubmitResetPassword = viewModel::onSubmitResetPassword
     )
 }
@@ -149,7 +153,9 @@ fun AuthScreen(
     onOpenResetPassword: () -> Unit = {},
     onCloseResetPassword: () -> Unit = {},
     onResetEmailChange: (String) -> Unit = {},
+    onResetCodeChange: (String) -> Unit = {},
     onResetNewPasswordChange: (String) -> Unit = {},
+    onRequestResetCode: () -> Unit = {},
     onSubmitResetPassword: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -208,12 +214,19 @@ fun AuthScreen(
         if (state.showResetPasswordDialog) {
             ResetPasswordDialog(
                 email = state.resetEmail,
+                code = state.resetCode,
                 newPassword = state.resetNewPassword,
                 emailError = state.resetEmailError,
+                codeError = state.resetCodeError,
                 passwordError = state.resetPasswordError,
+                codeSent = state.resetCodeSent,
+                infoMessage = state.resetInfoMessage,
+                demoCodeHint = state.resetDemoCodeHint,
                 isSubmitting = state.isResettingPassword,
                 onEmailChange = onResetEmailChange,
+                onCodeChange = onResetCodeChange,
                 onNewPasswordChange = onResetNewPasswordChange,
+                onRequestCode = onRequestResetCode,
                 onDismiss = onCloseResetPassword,
                 onConfirm = onSubmitResetPassword
             )
@@ -1041,12 +1054,19 @@ private fun RegisterContent(
 @Composable
 private fun ResetPasswordDialog(
     email: String,
+    code: String,
     newPassword: String,
     emailError: String?,
+    codeError: String?,
     passwordError: String?,
+    codeSent: Boolean,
+    infoMessage: String?,
+    demoCodeHint: String?,
     isSubmitting: Boolean,
     onEmailChange: (String) -> Unit,
+    onCodeChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
+    onRequestCode: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -1088,7 +1108,11 @@ private fun ResetPasswordDialog(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Ingresa el correo electrónico de tu cuenta y define tu nueva contraseña segura (mínimo 8 caracteres).",
+                    text = if (!codeSent) {
+                        "Paso 1 de 2: Solicita un código de verificación de 6 dígitos para tu correo registrado."
+                    } else {
+                        "Paso 2 de 2: Ingresa el código de verificación y define tu nueva contraseña segura (mín. 8 caracteres)."
+                    },
                     fontSize = 13.5.sp,
                     color = TextSecondary,
                     lineHeight = 19.sp
@@ -1107,20 +1131,66 @@ private fun ResetPasswordDialog(
                     leadingIcon = Icons.Outlined.Email
                 )
 
-                Spacer(Modifier.height(14.dp))
+                if (infoMessage != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = TealBadgeBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = infoMessage,
+                                fontSize = 12.5.sp,
+                                color = TealDark,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (!demoCodeHint.isNullOrBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = { onCodeChange(demoCodeHint) },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(
+                                        text = "Código temporal: $demoCodeHint (Tocar para autocompletar)",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = TealPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
-                FieldLabelRow(label = "Nueva contraseña", rightHint = "Mín. 8 caracteres")
-                Spacer(Modifier.height(6.dp))
-                ClinicalTextField(
-                    value = newPassword,
-                    onValueChange = onNewPasswordChange,
-                    placeholder = "Nueva contraseña segura",
-                    error = passwordError,
-                    enabled = !isSubmitting,
-                    keyboardType = KeyboardType.Password,
-                    leadingIcon = Icons.Outlined.Lock,
-                    visualTransformation = PasswordVisualTransformation()
-                )
+                if (codeSent) {
+                    Spacer(Modifier.height(14.dp))
+                    FieldLabelRow(label = "Código de verificación", rightHint = "6 dígitos")
+                    Spacer(Modifier.height(6.dp))
+                    ClinicalTextField(
+                        value = code,
+                        onValueChange = onCodeChange,
+                        placeholder = "Ej. 482910",
+                        error = codeError,
+                        enabled = !isSubmitting,
+                        keyboardType = KeyboardType.Number,
+                        leadingIcon = Icons.Outlined.Lock
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+                    FieldLabelRow(label = "Nueva contraseña", rightHint = "Mín. 8 caracteres")
+                    Spacer(Modifier.height(6.dp))
+                    ClinicalTextField(
+                        value = newPassword,
+                        onValueChange = onNewPasswordChange,
+                        placeholder = "Nueva contraseña segura",
+                        error = passwordError,
+                        enabled = !isSubmitting,
+                        keyboardType = KeyboardType.Password,
+                        leadingIcon = Icons.Outlined.Lock,
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                }
 
                 Spacer(Modifier.height(22.dp))
 
@@ -1140,7 +1210,7 @@ private fun ResetPasswordDialog(
                         Text("Cancelar", fontWeight = FontWeight.Bold, color = TextSecondary)
                     }
                     Button(
-                        onClick = onConfirm,
+                        onClick = { if (codeSent) onConfirm() else onRequestCode() },
                         enabled = !isSubmitting,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
@@ -1155,7 +1225,11 @@ private fun ResetPasswordDialog(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Actualizar", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(
+                                text = if (codeSent) "Actualizar" else "Enviar código",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
                     }
                 }

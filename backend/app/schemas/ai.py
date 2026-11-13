@@ -80,3 +80,29 @@ class AiPrescriptionScanResponse(BaseModel):
     medicamentos: list[AiPrescriptionMedItem]
     model_used: str = "medi-clinico"
     using_ollama: bool = True
+
+
+class AiAdherencePredictRequest(BaseModel):
+    edad: int = Field(..., ge=0, le=120, description="Edad del paciente")
+    medicamentos_activos: int = Field(..., ge=1, le=30, description="Cantidad de fármacos diarios")
+    adherencia_historica_pct: float = Field(..., ge=0.0, le=100.0, description="Porcentaje histórico de tomas a tiempo")
+    retraso_promedio_min: float = Field(..., ge=0.0, description="Minutos promedio de retraso al confirmar toma")
+    tiene_cuidador: int = Field(default=0, ge=0, le=1, description="1 si tiene cuidador asignado, 0 si no")
+
+
+class AiAdherencePredictResponse(BaseModel):
+    riesgo_abandono: bool
+    nivel_riesgo: str  # "BAJO" | "MODERADO" | "CRÍTICO"
+    probabilidad_abandono_pct: float
+    probabilidad_adherencia_pct: float
+    factores_riesgo: list[str]
+    recomendacion_clinica: str
+    alerta_disparada: bool
+    modelo: str = "DecisionTreeClassifier (Scikit-Learn 04/11)"
+
+
+class AiEvaluarPacienteResponse(AiAdherencePredictResponse):
+    paciente_id: int
+    nombre_paciente: str
+    datos_clinicos_extraidos: dict[str, float | int]
+

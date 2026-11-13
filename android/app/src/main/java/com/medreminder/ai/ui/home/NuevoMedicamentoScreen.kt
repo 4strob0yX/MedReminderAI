@@ -1,5 +1,6 @@
 package com.medreminder.ai.ui.home
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -881,17 +883,47 @@ fun NuevoMedicamentoScreen(
                             color = TextPrimary
                         )
                         Spacer(Modifier.height(8.dp))
+                        val contextTime = LocalContext.current
+                        val presetHoras = listOf("08:00 AM", "02:00 PM", "09:00 PM", "Ahora")
+                        val isCustomHora = form.horaPrimeraToma !in presetHoras
+                        val openCustomTimePicker = {
+                            val cal = java.util.Calendar.getInstance()
+                            TimePickerDialog(
+                                contextTime,
+                                { _, h, m ->
+                                    val h12 = if (h % 12 == 0) 12 else h % 12
+                                    val amPm = if (h < 12) "AM" else "PM"
+                                    val formatted = String.format(java.util.Locale.US, "%02d:%02d %s", h12, m, amPm)
+                                    onHoraPrimeraTomaChange(formatted)
+                                },
+                                cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                cal.get(java.util.Calendar.MINUTE),
+                                false
+                            ).show()
+                        }
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf("08:00 AM", "02:00 PM", "09:00 PM", "Ahora").forEach { hora ->
+                            presetHoras.forEach { hora ->
                                 SuggestionChipPill(
                                     text = hora,
                                     selected = form.horaPrimeraToma == hora,
                                     onClick = { onHoraPrimeraTomaChange(hora) }
                                 )
                             }
+                            if (isCustomHora) {
+                                SuggestionChipPill(
+                                    text = form.horaPrimeraToma,
+                                    selected = true,
+                                    onClick = openCustomTimePicker
+                                )
+                            }
+                            SuggestionChipPill(
+                                text = if (isCustomHora) "Cambiar hora" else "Otra hora",
+                                selected = false,
+                                onClick = openCustomTimePicker
+                            )
                         }
 
                         Spacer(Modifier.height(14.dp))

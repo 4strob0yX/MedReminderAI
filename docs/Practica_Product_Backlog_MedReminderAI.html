@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Práctica: Investigación y Estructuración del Product Backlog</title>
+<style>
+  @page {
+    size: letter;
+    margin: 2cm 2cm 2cm 2cm;
+  }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.35;
+    color: #282C34;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* --- PORTADA OFICIAL (PAGE 1) --- */
+  .cover-page {
+    height: 100%;
+    min-height: 880px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: center;
+    page-break-after: always;
+  }
+  .cover-logos {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+  }
+  .cover-logos img.utvt {
+    height: 60px;
+    width: auto;
+  }
+  .cover-logos img.edomex {
+    height: 48px;
+    width: auto;
+  }
+  .cover-institution {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1B365D;
+    line-height: 1.3;
+  }
+  .cover-direction {
+    font-size: 10pt;
+    font-weight: bold;
+    color: #0E8074;
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+  .cover-program {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #475569;
+    margin-top: 10px;
+  }
+  .cover-program-name {
+    font-size: 10.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    margin-top: 3px;
+  }
+  .cover-section-title {
+    margin-top: 30px;
+  }
+  .cover-label {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #64748B;
+    letter-spacing: 0.5px;
+  }
+  .cover-job-title {
+    font-size: 13.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+  .cover-job-sub {
+    font-size: 10.5pt;
+    color: #0E8074;
+    font-weight: bold;
+    margin-top: 4px;
+  }
+  .cover-meta {
+    margin-top: 25px;
+  }
+  .cover-meta-item {
+    margin-bottom: 12px;
+  }
+  .cover-meta-val {
+    font-size: 10.5pt;
+    color: #1E293B;
+  }
+  .cover-team {
+    margin-top: 20px;
+    text-align: left;
+    display: inline-block;
+    font-size: 10pt;
+    line-height: 1.5;
+  }
+  .cover-team-line {
+    font-family: monospace;
+    font-size: 9.5pt;
+  }
+  .cover-footer {
+    margin-top: 30px;
+    font-size: 9pt;
+    font-weight: bold;
+    color: #64748B;
+    text-align: center;
+  }
+
+  /* --- PÁGINAS DE CONTENIDO --- */
+  .page {
+    page-break-after: always;
+  }
+  .page-last {
+    page-break-after: avoid;
+  }
+  h1 {
+    font-size: 12.5pt;
+    font-weight: bold;
+    color: #1B365D;
+    border-bottom: 2px solid #0E8074;
+    padding-bottom: 4px;
+    margin: 0 0 14px 0;
+  }
+  h2 {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #0E8074;
+    margin: 14px 0 6px 0;
+  }
+  p {
+    margin: 0 0 10px 0;
+    text-align: justify;
+  }
+  .q-title {
+    font-weight: bold;
+    color: #1B365D;
+  }
+  
+  /* Tablas limpias y con espacio */
+  table.clean-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 14px 0;
+    font-size: 9pt;
+  }
+  table.clean-table th {
+    background-color: #1B365D;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 8px 10px;
+    text-align: left;
+    border: 1px solid #1B365D;
+  }
+  table.clean-table td {
+    padding: 8px 10px;
+    border: 1px solid #CBD5E1;
+    vertical-align: top;
+    line-height: 1.3;
+  }
+  table.clean-table tr:nth-child(even) {
+    background-color: #F8FAFC;
+  }
+
+  /* Cajas de llamada limpias */
+  .callout {
+    background-color: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-left: 5px solid #1B365D;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 9.5pt;
+  }
+  .callout-story {
+    background-color: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-left: 5px solid #16A34A;
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin: 12px 0;
+  }
+  .callout-title {
+    font-weight: bold;
+    font-size: 10pt;
+    color: #1B365D;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========================================== -->
+<!-- PÁGINA 1: PORTADA OFICIAL                  -->
+<!-- ========================================== -->
+<div class="cover-page">
+  <div class="cover-logos">
+    <img src="file:///Users/4strob0y/Developer/MedReminderAI/docs/logo_utvt.png" class="utvt" alt="UTVT">
+    <img src="file:///Users/4strob0y/Developer/MedReminderAI/docs/logo_edomex.png" class="edomex" alt="EDOMEX">
+  </div>
+
+  <div>
+    <div class="cover-institution">UNIVERSIDAD TECNOLÓGICA DEL VALLE DE TOLUCA</div>
+    <div class="cover-direction">DIRECCIÓN DE CARRERA DE TECNOLOGÍAS DE LA INFORMACIÓN Y COMUNICACIÓN</div>
+    <div class="cover-program">PROGRAMA EDUCATIVO</div>
+    <div class="cover-program-name">TÉCNICO SUPERIOR UNIVERSITARIO EN DESARROLLO DE SOFTWARE MULTIPLATAFORMA</div>
+  </div>
+
+  <div class="cover-section-title">
+    <div class="cover-label">NOMBRE DEL TRABAJO:</div>
+    <div class="cover-job-title">PRÁCTICA: INVESTIGACIÓN Y ESTRUCTURACIÓN DEL PRODUCT BACKLOG</div>
+    <div class="cover-job-sub">Proyecto Integrador: MedReminder AI (Gestión y Recordatorio Farmacológico)</div>
+  </div>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-label">ASIGNATURA:</div>
+      <div class="cover-meta-val" style="font-weight:bold;">Fundamentos de Inteligencia Artificial / Metodologías Ágiles</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-label">NOMBRE DEL DOCENTE:</div>
+      <div class="cover-meta-val">Ing. Hector Velazquez Estrada</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cover-label" style="text-align: center; margin-bottom: 6px;">PRESENTA:</div>
+    <div style="text-align: center;">
+      <div class="cover-team">
+        <div class="cover-team-line">222410897 &nbsp;–&nbsp; Gutierrez Ugalde Samuel</div>
+        <div class="cover-team-line">222410935 &nbsp;–&nbsp; Nava Garcia Rodrigo</div>
+        <div class="cover-team-line">222411182 &nbsp;–&nbsp; Castillo Ramirez Nahum Yabet</div>
+        <div class="cover-team-line">222410915 &nbsp;–&nbsp; Ramirez Romero Pablo</div>
+        <div class="cover-team-line">222410899 &nbsp;–&nbsp; Peña Hernandez Alexander</div>
+      </div>
+    </div>
+    <div style="margin-top: 14px; font-weight: bold; color: #1B365D; font-size: 9.5pt;">
+      GRUPO: DSM - 53 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; NO. DE EQUIPO: 5 (MedReminder AI)
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    SANTA MARÍA ATARASQUILLO, LERMA ESTADO DE MÉXICO. NOVIEMBRE 2026
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- PÁGINA 2: SECCIÓN 1                        -->
+<!-- ========================================== -->
+<div class="page">
+  <h1>SECCIÓN 1: ¿Qué es el Product Backlog y quién lo manda?</h1>
+
+  <h2>Investigación:</h2>
+  <p><span class="q-title">1. ¿Qué es un Product Backlog en Scrum y por qué se dice que es un documento "vivo" que nunca se termina?</span><br>
+  El <b>Product Backlog</b> es la lista ordenada de todo lo que el equipo planea construir o mejorar en la aplicación: nuevas funciones, correcciones de errores y cambios técnicos. En lugar de ser un documento congelado como en cascada, aquí los elementos se priorizan continuamente según el valor que aportan al usuario y al negocio.<br><br>
+  Se dice que es un documento <b>«vivo» que nunca se termina</b> porque mientras la aplicación tenga usuarios reales, el proyecto nunca está 100% cerrado. Siempre van a surgir nuevas ideas, sugerencias de los médicos, cambios en las versiones de Android o fallas imprevistas. El Backlog se refina y actualiza en cada sprint; solo se da por concluido cuando la aplicación se retira del mercado de manera definitiva.</p>
+
+  <p><span class="q-title">2. ¿Quién es el Product Owner (Dueño del Producto) y cuál es su única responsabilidad frente al equipo de desarrollo?</span><br>
+  El <b>Product Owner</b> es el integrante del equipo que representa la voz de los clientes y usuarios (en nuestro caso: pacientes de la tercera edad, familiares y médicos). No es un jefe que da órdenes ni supervisa horarios.<br><br>
+  Su <b>única responsabilidad frente al equipo de desarrollo</b> es <b>maximizar el valor del producto que construimos</b>. Esto significa que él es el único con la autoridad para decidir qué cosas van primero en el Backlog y explicar claramente por qué se necesitan. En resumen: el Product Owner manda sobre el <i>«qué»</i> y el <i>«para qué»</i>, pero respeta totalmente que los desarrolladores decidan con autonomía el <i>«cómo»</i> resolverlo técnicamente.</p>
+
+  <h2>Aplicación en Nuestro Proyecto (MedReminder AI):</h2>
+  <p><b>1. Product Owner del Equipo:</b> Elegimos a <b>Rodrigo Nava García</b> como Product Owner de MedReminder AI. Su labor es asegurar que cada función resuelva un problema real de adherencia médica y accesibilidad para adultos mayores, antes de pasar a detalles secundarios.</p>
+
+  <p><b>2. Top 3 de Funcionalidades Críticas de Nuestro Backlog:</b></p>
+  <table class="clean-table">
+    <thead>
+      <tr>
+        <th style="width: 15%; text-align: center;">Prioridad</th>
+        <th style="width: 35%;">Funcionalidad</th>
+        <th style="width: 50%;">Justificación Práctica de Negocio / Clínica</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="text-align: center; font-weight: bold; color: #0E8074;">#1 (Crítica)</td>
+        <td><b>Motor de Alarmas Heads-Up Locales (Android)</b></td>
+        <td>Hace que la alarma suene en el segundo exacto a pantalla completa, aun con el celular bloqueado, sin internet o en reposo (Doze Mode). Es la función vital: si no suena, el paciente olvida el fármaco.</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold; color: #1B365D;">#2 (Alta)</td>
+        <td><b>Confirmación de Toma y Descuento en Botiquín</b></td>
+        <td>Un botón directo para confirmar que ya se ingirió la dosis, descontando el stock local para evitar confusiones de «¿ya me la tomé?» y prevenir sobredosis.</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold; color: #1B365D;">#3 (Alta)</td>
+        <td><b>Avisos Automáticos al Cuidador ante Omisiones</b></td>
+        <td>Si el abuelo pospone la alarma más del límite seguro (20 min) o no se toma un fármaco crítico, el sistema avisa de inmediato al familiar responsable.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========================================== -->
+<!-- PÁGINA 3: SECCIÓN 2                        -->
+<!-- ========================================== -->
+<div class="page">
+  <h1>SECCIÓN 2: ¿Cómo se escribe una Historia de Usuario?</h1>
+
+  <h2>Investigación:</h2>
+  <p><span class="q-title">1. ¿Qué es una Historia de Usuario (User Story) y cuál es la estructura canónica diseñada por Mike Cohn?</span><br>
+  Una <b>Historia de Usuario</b> es una descripción breve y en lenguaje cotidiano sobre lo que necesita una persona al usar la aplicación. No se redacta como un manual técnico aburrido, sino como una herramienta práctica para que los programadores entiendan el problema real del usuario y el beneficio que le vamos a entregar.<br><br>
+  <b>Mike Cohn</b> diseñó la estructura canónica estándar más usada en desarrollo ágil:</p>
+
+  <div class="callout" style="text-align: center; font-size: 10.5pt; font-weight: bold; color: #1B365D; background-color: #F1F5F9; border-color: #1B365D;">
+    « Como <span style="color:#0E8074;">[ Rol del usuario ]</span>, quiero <span style="color:#0E8074;">[ Funcionalidad específica ]</span>, para <span style="color:#0E8074;">[ Beneficio de negocio / Valor ]</span> »
+  </div>
+
+  <p><b>Desglose de cada componente:</b><br>
+  • <b>«Como [Rol]»:</b> Define con claridad quién es la persona (ej. adulto mayor con hipertensión, familiar cuidador).<br>
+  • <b>«Quiero [Funcionalidad]»:</b> Describe la acción que desea realizar en la app, sin meter términos de código o bases de datos de forma anticipada.<br>
+  • <b>«Para [Beneficio]»:</b> Explica la razón de ser de la funcionalidad. Esta parte es la más importante porque justifica si realmente vale la pena programarla.</p>
+
+  <h2>Aplicación en Nuestro Proyecto (MedReminder AI):</h2>
+  <p><b>Requerimiento Tradicional de la Fase 1 (Manual Técnico):</b><br>
+  <i>«RF-03: Alarmas Heads-Up Locales — El sistema debe disparar alarmas acústicas, visuales y hápticas en el segundo exacto mediante AlarmManager en Android, incluso en Doze mode, notificando al usuario sobre la toma de sus medicamentos programados.»</i></p>
+
+  <p><b>Transformación Obligatoria a la Fórmula Canónica:</b><br>
+  Pasamos de una instrucción técnica sobre la API de Android a una historia centrada en la vida del paciente:</p>
+
+  <div class="callout-story">
+    <div style="font-size: 9pt; font-weight: bold; color: #166534; margin-bottom: 6px;">TARJETA DE HISTORIA DE USUARIO (HU-01: ALARMAS CLÍNICAS)</div>
+    <div style="font-size: 10.5pt; line-height: 1.4;">
+      « <b>Como</b> <span style="color:#1B365D; font-weight: bold;">adulto mayor con problemas de memoria que toma varios medicamentos al día</span>,<br>
+      &nbsp;&nbsp;<b>quiero</b> <span style="color:#0E8074; font-weight: bold;">recibir una alarma clara en pantalla completa a la hora exacta de mi dosis (aunque mi celular esté bloqueado o sin internet)</span>,<br>
+      &nbsp;&nbsp;<b>para</b> <span style="color:#166534; font-weight: bold;">tomarme mis pastillas a tiempo por mí mismo, evitar descompensaciones de salud y no depender de que alguien me esté recordando a cada rato.</span> »
+    </div>
+  </div>
+
+  <p style="margin-top: 10px;"><b>Diferencia Práctica:</b> El requerimiento tradicional solo le decía al programador «usa AlarmManager». La Historia de Usuario le recuerda al equipo que el objetivo es devolverle la autonomía y seguridad a un adulto mayor, asegurando que la interfaz sea fácil de ver y que no dependa de tener saldo o internet.</p>
+</div>
+
+<!-- ========================================== -->
+<!-- PÁGINA 4: SECCIÓN 3                        -->
+<!-- ========================================== -->
+<div class="page-last">
+  <h1>SECCIÓN 3: Las reglas de oro (Las 3 C y Criterios de Aceptación)</h1>
+
+  <h2>Investigación:</h2>
+  <p><span class="q-title">1. ¿En qué consiste el modelo de las 3 C propuesto por Ron Jeffries?</span><br>
+  Ron Jeffries explicó que una Historia de Usuario no es solo texto en un papel, sino tres pasos inseparables:<br>
+  • <b>Card (Tarjeta):</b> La ficha física o digital donde se escribe la historia. Es breve a propósito porque solo representa una «promesa de conversación».<br>
+  • <b>Conversation (Conversación):</b> La charla directa entre el Product Owner y los desarrolladores antes de programar para resolver dudas, revisar casos especiales y ponerse de acuerdo.<br>
+  • <b>Confirmation (Confirmación):</b> Los criterios de aceptación con los que probaremos la función para confirmar que ya quedó bien hecha.</p>
+
+  <p><span class="q-title">2. ¿Qué son los Criterios de Aceptación y por qué una tarjeta no se puede programar si no los tiene?</span><br>
+  Son las reglas claras y medibles que nos dicen qué condiciones debe cumplir la función para darla por buena. Una tarjeta <b>no se puede programar sin ellos</b> porque el programador terminaría adivinando cómo debe funcionar la app, haría cosas de más o dejaría fuera detalles importantes. Además, en la entrega con el cliente no habría forma objetiva de saber si la tarea está realmente terminada.</p>
+
+  <h2>Aplicación en Nuestro Proyecto (MedReminder AI):</h2>
+
+  <div class="callout" style="background-color: #F8FAFC; border-color: #1B365D;">
+    <div class="callout-title">1. CONVERSACIÓN: Dudas Técnicas del Equipo al Product Owner (Rodrigo Nava)</div>
+    <div style="margin-bottom: 8px;">
+      <b>• Duda 1 (Teléfono en Silencio o Modo No Molestar):</b><br>
+      <i>Pregunta del Equipo:</i> «¿Qué pasa si el paciente tiene el celular en silencio o No Molestar? ¿La alarma debe sonar a la fuerza o se queda callada?»<br>
+      <b>Respuesta de Rodrigo (PO):</b> «Para medicinas críticas (presión o insulina) debe sonar a la fuerza usando el canal de alarma del sistema (<code>USAGE_ALARM</code>). Para vitaminas comunes puede respetar el modo silencio.»
+    </div>
+    <div>
+      <b>• Duda 2 (Límite de Posposición):</b><br>
+      <i>Pregunta del Equipo:</i> «¿Cuántas veces puede posponer la alarma el abuelo? Si no le ponemos límite, podría posponerla todo el día.»<br>
+      <b>Respuesta de Rodrigo (PO):</b> «Máximo 2 veces de 10 minutos cada una. Si a la segunda no confirma en los siguientes 10 minutos, se marca como Omitida y se le avisa al cuidador.»
+    </div>
+  </div>
+
+  <p style="margin-top: 8px;"><b>2. CONFIRMACIÓN: Criterios de Aceptación Medibles de la Función (Checklist):</b></p>
+  <table class="clean-table">
+    <thead>
+      <tr>
+        <th style="width: 30%;">Regla Verificable</th>
+        <th style="width: 70%;">Criterio Medible y Prueba de Aceptación</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Criterio 1:<br>Puntualidad y Despertar</b></td>
+        <td>La alarma debe sonar a la hora exacta (tolerancia de ±2 segundos) y encender la pantalla completa con sonido y vibración durante al menos 45 segundos, incluso con el teléfono bloqueado y sin internet.</td>
+      </tr>
+      <tr>
+        <td><b>Criterio 2:<br>Confirmación y Stock</b></td>
+        <td>La pantalla solo muestra dos botones grandes («Tomar Ahora» y «Posponer 10 min»). Al tocar «Tomar Ahora», se descuenta 1 pastilla del stock local en menos de 1 segundo y se cierra la alarma.</td>
+      </tr>
+      <tr>
+        <td><b>Criterio 3:<br>Límite y Alerta Familiar</b></td>
+        <td>El botón «Posponer» solo se puede usar 2 veces consecutivas. Si pasan 10 minutos tras la segunda posposición sin confirmación, la dosis se registra como Omitida y se envía la alerta al cuidador.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

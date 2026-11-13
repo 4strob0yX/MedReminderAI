@@ -5,6 +5,8 @@ CREATE TABLE usuario (
     password_hash VARCHAR(255) NOT NULL,
     fecha_nacimiento DATE NULL,
     rol VARCHAR(30) NOT NULL DEFAULT 'paciente',
+    escudo_usado_fecha DATE NULL,
+    escudos_usados_total INT NOT NULL DEFAULT 0,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -99,4 +101,33 @@ CREATE TABLE alerta_cuidador (
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
     INDEX ix_alerta_cuidador_usuario (id_usuario)
+);
+
+-- Vinculacion real multi-dispositivo entre paciente y cuidador mediante codigo temporal.
+CREATE TABLE IF NOT EXISTS vinculacion_cuidador (
+    id_vinculacion INT AUTO_INCREMENT PRIMARY KEY,
+    id_paciente INT NOT NULL,
+    id_cuidador INT NULL,
+    codigo_vinculacion VARCHAR(16) NOT NULL UNIQUE,
+    estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+    parentesco VARCHAR(100) NULL,
+    expira_en DATETIME NOT NULL,
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    fecha_vinculacion DATETIME NULL,
+    FOREIGN KEY (id_paciente) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (id_cuidador) REFERENCES usuario(id_usuario) ON DELETE SET NULL,
+    INDEX idx_vinc_paciente (id_paciente),
+    INDEX idx_vinc_cuidador (id_cuidador)
+);
+
+-- Codigos temporales de recuperacion de contrasena.
+CREATE TABLE IF NOT EXISTS password_reset_code (
+    id_reset INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    codigo_hash VARCHAR(255) NOT NULL,
+    expira_en DATETIME NOT NULL,
+    usado BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    INDEX idx_reset_usuario (id_usuario)
 );

@@ -21,6 +21,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +39,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EmojiEvents
@@ -46,11 +49,14 @@ import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -361,30 +367,30 @@ private enum class RangoHonor(
     HIERRO(
         nombre = "Hierro",
         minXp = 0,
-        maxXp = 299,
+        maxXp = 99,
         colorPrimario = Color(0xFF5C677D),
         colorSecundario = Color(0xFF979DAC),
         beneficio = "Posposición restringida en medicamentos sensibles"
     ),
     BRONCE(
         nombre = "Bronce",
-        minXp = 300,
-        maxXp = 499,
+        minXp = 100,
+        maxXp = 249,
         colorPrimario = Color(0xFFB06E3B),
         colorSecundario = Color(0xFFE29578),
         beneficio = "1 posposición de 30 min permitida por día"
     ),
     PLATA(
         nombre = "Plata",
-        minXp = 500,
-        maxXp = 699,
+        minXp = 250,
+        maxXp = 499,
         colorPrimario = Color(0xFF457B9D),
         colorSecundario = Color(0xFFA8DADC),
         beneficio = "Desbloquea +1 Escudo de Racha semanal"
     ),
     ORO(
         nombre = "Oro",
-        minXp = 700,
+        minXp = 500,
         maxXp = 899,
         colorPrimario = Color(0xFFD97706),
         colorSecundario = Color(0xFFFFD166),
@@ -393,7 +399,7 @@ private enum class RangoHonor(
     DIAMANTE(
         nombre = "Diamante",
         minXp = 900,
-        maxXp = 1200,
+        maxXp = 1500,
         colorPrimario = Color(0xFF5A189A),
         colorSecundario = Color(0xFF72EFDD),
         beneficio = "Máximo Honor Clínico • Reporte médico certificado"
@@ -439,19 +445,19 @@ fun AnalisisDfsScreen(state: HomeUiState) {
 }
 
 @Composable
-fun AnalisisDfsScreenContent(state: HomeUiState) {
+fun AnalisisDfsScreenContent(
+    state: HomeUiState,
+    onActivarEscudo: () -> Unit = {},
+    onCambiarAlgoritmoMl: (String) -> Unit = {},
+    onEvaluarMl: () -> Unit = {},
+    onCargarTorneoMl: () -> Unit = {}
+) {
     val context = LocalContext.current
     val hoyIso = remember { LocalDate.now().toString() }
     val prefs = remember(context) {
         context.getSharedPreferences(PREFS_PROGRESO_HONOR, Context.MODE_PRIVATE)
     }
 
-    // Estado persistente entre cambios de pestaña y recreación de actividad
-    var escudoActivadoHoy by rememberSaveable {
-        val guardado = prefs.getString(KEY_ESCUDO_FECHA, null) == hoyIso ||
-            ProgresoHonorSessionStore.escudoFechaActiva == hoyIso
-        mutableStateOf(guardado)
-    }
     var simularPenalizacionToggle by rememberSaveable {
         val guardado = prefs.getBoolean(KEY_SIMULAR_CASTIGO, ProgresoHonorSessionStore.simularPenalizacion)
         mutableStateOf(guardado)
@@ -460,10 +466,22 @@ fun AnalisisDfsScreenContent(state: HomeUiState) {
         mutableIntStateOf(ProgresoHonorSessionStore.filtroEtapaFuegoIdx)
     }
 
+    val escudoActivadoHoy = (state.escudoActivoHoy || state.escudoUsadoFecha == hoyIso) &&
+        !simularPenalizacionToggle
+
     // Pestaña interna de Progreso: 0 = Adherencia Clínica & Métricas, 1 = Racha y Honor
     var subTabProgreso by rememberSaveable { mutableIntStateOf(0) }
 
-    val metricas = remember(state.tomasHoy, state.botiquinItems, escudoActivadoHoy, simularPenalizacionToggle) {
+    val metricas = remember(
+        state.estadisticas,
+        state.tomasHoy,
+        state.botiquinItems,
+        state.rachaDias,
+        state.puntosXp,
+        state.escudosRacha,
+        escudoActivadoHoy,
+        simularPenalizacionToggle
+    ) {
         calcularMetricasProgreso(
             state = state,
             escudoActivadoHoy = escudoActivadoHoy,
@@ -500,6 +518,16 @@ fun AnalisisDfsScreenContent(state: HomeUiState) {
                 )
             }
 
+            // Predicción Clínica ML de Abandono (Random Forest / Árbol / KNN + Torneo P05)
+            item {
+                PrediccionMlCard(
+                    state = state,
+                    onCambiarAlgoritmo = onCambiarAlgoritmoMl,
+                    onRefrescarEvaluacion = onEvaluarMl,
+                    onCargarTorneo = onCargarTorneoMl
+                )
+            }
+
             // Botón de Compartir Resumen Clínico con Médico / Familiar
             item {
                 CompartirResumenClinicoCard(
@@ -521,11 +549,6 @@ fun AnalisisDfsScreenContent(state: HomeUiState) {
                         simularPenalizacionToggle = nuevoValor
                         ProgresoHonorSessionStore.simularPenalizacion = nuevoValor
                         prefs.edit().putBoolean(KEY_SIMULAR_CASTIGO, nuevoValor).apply()
-                        if (nuevoValor && escudoActivadoHoy) {
-                            escudoActivadoHoy = false
-                            ProgresoHonorSessionStore.escudoFechaActiva = null
-                            prefs.edit().remove(KEY_ESCUDO_FECHA).apply()
-                        }
                     }
                 )
             }
@@ -541,14 +564,12 @@ fun AnalisisDfsScreenContent(state: HomeUiState) {
                     },
                     escudoActivadoHoy = escudoActivadoHoy,
                     onActivarEscudo = {
-                        escudoActivadoHoy = true
-                        ProgresoHonorSessionStore.escudoFechaActiva = hoyIso
-                        prefs.edit().putString(KEY_ESCUDO_FECHA, hoyIso).apply()
-                        Toast.makeText(
-                            context,
-                            "Escudo Protector activado: tu racha de fuego está protegida hoy",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        if (simularPenalizacionToggle) {
+                            simularPenalizacionToggle = false
+                            ProgresoHonorSessionStore.simularPenalizacion = false
+                            prefs.edit().putBoolean(KEY_SIMULAR_CASTIGO, false).apply()
+                        }
+                        onActivarEscudo()
                     }
                 )
             }
@@ -590,6 +611,7 @@ private fun calcularMetricasProgreso(
     escudoActivadoHoy: Boolean,
     forzarSimulacionCastigo: Boolean
 ): MetricasProgresoHonor {
+    val stats = state.estadisticas
     val tomas = state.tomasHoy
     val hoyTomadas = tomas.count { it.estado.equals("tomado", ignoreCase = true) }
     val hoyPospuestas = tomas.count {
@@ -623,40 +645,66 @@ private fun calcularMetricasProgreso(
         )
         tomas.isNotEmpty() -> BarraAdherenciaUi(
             etiqueta = "Hoy",
-            tituloCompleto = "Hoy (En curso • $hoyPendientes pendiente(s))",
-            tomadas = hoyPendientes.coerceAtLeast(1),
+            tituloCompleto = "Hoy ($hoyPendientes pendiente(s))",
+            tomadas = 0,
             pospuestas = 0,
-            omitidas = 0,
-            notaExtra = "Aún no vencen tus $hoyPendientes toma(s) programada(s) de hoy (0 omisiones)"
+            omitidas = if (forzarSimulacionCastigo) 2 else 0,
+            notaExtra = "Tienes $hoyPendientes toma(s) programada(s) pendiente(s) hoy (0 omisiones)"
         )
         else -> BarraAdherenciaUi(
             etiqueta = "Hoy",
-            tituloCompleto = "Hoy (En vivo)",
-            tomadas = if (forzarSimulacionCastigo) 3 else 5,
-            pospuestas = 1,
-            omitidas = hoyOmitidas,
-            notaExtra = "Resumen de cumplimiento diario"
+            tituloCompleto = "Hoy",
+            tomadas = 0,
+            pospuestas = 0,
+            omitidas = if (forzarSimulacionCastigo) 2 else 0,
+            notaExtra = "Sin dosis programadas para el día seleccionado"
         )
     }
 
-    // Historial de los últimos 7 días (Lun..Hoy)
-    val barrasSemanales = listOf(
-        BarraAdherenciaUi("Lun", "Lunes", tomadas = 6, pospuestas = 0, omitidas = 0),
-        BarraAdherenciaUi("Mar", "Martes", tomadas = 6, pospuestas = 1, omitidas = 0),
-        BarraAdherenciaUi("Mié", "Miércoles", tomadas = 5, pospuestas = 1, omitidas = 0),
-        BarraAdherenciaUi("Jue", "Jueves", tomadas = 6, pospuestas = 0, omitidas = 0),
-        BarraAdherenciaUi("Vie", "Viernes", tomadas = 5, pospuestas = 1, omitidas = 1),
-        BarraAdherenciaUi("Sáb", "Sábado", tomadas = 6, pospuestas = 0, omitidas = 0),
-        barraHoy
-    )
+    // Historial semanal REAL desde /recordatorios/estadisticas (sin datos inventados)
+    val barrasSemanales: List<BarraAdherenciaUi> = if (stats != null && stats.adherenciaSemanal.isNotEmpty()) {
+        stats.adherenciaSemanal.mapIndexed { idx, dia ->
+            val esUltimo = idx == stats.adherenciaSemanal.lastIndex
+            val extraOmitidas = if (forzarSimulacionCastigo && esUltimo) 2 else 0
+            BarraAdherenciaUi(
+                etiqueta = dia.dia,
+                tituloCompleto = "${dia.dia} (${dia.fecha})",
+                tomadas = dia.tomadas,
+                pospuestas = dia.pospuestas,
+                omitidas = dia.omitidas + extraOmitidas,
+                notaExtra = "${dia.tomadas} tomada(s) de ${dia.programadas} programada(s)"
+            )
+        }
+    } else {
+        listOf(barraHoy)
+    }
 
     val totalTomadasSem = barrasSemanales.sumOf { it.tomadas }
-    val totalDosisSem = barrasSemanales.sumOf { it.total }.coerceAtLeast(1)
-    val adherenciaGlobalPct = ((totalTomadasSem.toFloat() / totalDosisSem) * 100f).toInt().coerceIn(0, 100)
+    val totalDosisSem = barrasSemanales.sumOf { it.total }
+    val adherenciaGlobalPct = if (!forzarSimulacionCastigo && stats != null) {
+        stats.porcentajeGlobal.toInt().coerceIn(0, 100)
+    } else if (totalDosisSem > 0) {
+        ((totalTomadasSem.toFloat() / totalDosisSem.toFloat()) * 100f).toInt().coerceIn(0, 100)
+    } else {
+        0
+    }
 
-    // Cálculo REAL por medicamento a partir de state.tomasHoy:
-    // NUNCA usar porcentajeRestante (stock de caja) como porcentaje de adherencia
-    val barrasPorMedicamento: List<BarraAdherenciaUi> = if (state.botiquinItems.isNotEmpty()) {
+    // Cumplimiento REAL por medicamento (priorizando cálculo histórico de backend)
+    val barrasPorMedicamento: List<BarraAdherenciaUi> = if (!forzarSimulacionCastigo && stats != null && stats.adherenciaPorMedicamento.isNotEmpty()) {
+        stats.adherenciaPorMedicamento.map { medStat ->
+            val etiquetaCorta = medStat.nombre.take(9).let {
+                if (medStat.nombre.length > 9) "$it…" else it
+            }
+            BarraAdherenciaUi(
+                etiqueta = etiquetaCorta,
+                tituloCompleto = medStat.nombre,
+                tomadas = medStat.tomadas,
+                pospuestas = 0,
+                omitidas = medStat.omitidas,
+                notaExtra = "${medStat.dosis} • ${medStat.tomadas} tomada(s), ${medStat.omitidas} omitida(s) de ${medStat.programadas} programada(s)"
+            )
+        }
+    } else if (state.botiquinItems.isNotEmpty()) {
         state.botiquinItems.mapIndexed { idx, med ->
             val tomasDeEsteMed = tomas.filter {
                 (it.idMedicamento != 0 && it.idMedicamento == med.idMedicamento) ||
@@ -670,22 +718,16 @@ private fun calcularMetricasProgreso(
             val omiHoy = tomasDeEsteMed.count { it.estado.equals("omitido", ignoreCase = true) } +
                 if (forzarSimulacionCastigo && idx == 0) 2 else 0
 
-            // Base semanal proporcional donde cualquier omisión/posposición real de hoy impacta directamente el %
-            val baseHistorialTomadas = if (omiHoy > 0) 4 else 6
-            val totalTomadasMed = baseHistorialTomadas + tomHoy
-            val totalPospuestasMed = posHoy + if (posHoy == 0 && omiHoy == 0 && idx % 3 == 1) 1 else 0
-            val totalOmitidasMed = omiHoy
-
             val etiquetaCorta = med.nombre.take(9).let {
                 if (med.nombre.length > 9) "$it…" else it
             }
             BarraAdherenciaUi(
                 etiqueta = etiquetaCorta,
                 tituloCompleto = med.nombre,
-                tomadas = totalTomadasMed,
-                pospuestas = totalPospuestasMed,
-                omitidas = totalOmitidasMed,
-                notaExtra = "Hoy: $tomHoy tomada(s), $posHoy pospuesta(s), $omiHoy omitida(s) • Stock en botiquín: ${med.stockActual} u. (${med.porcentajeRestante}% disponible, independiente de la adherencia)"
+                tomadas = tomHoy,
+                pospuestas = posHoy,
+                omitidas = omiHoy,
+                notaExtra = "Hoy: $tomHoy tomada(s), $posHoy pospuesta(s), $omiHoy omitida(s) • Stock: ${med.stockActual} u."
             )
         }
     } else if (tomas.isNotEmpty()) {
@@ -697,58 +739,29 @@ private fun calcularMetricasProgreso(
             }
             val omiHoy = lista.count { it.estado.equals("omitido", ignoreCase = true) } +
                 if (forzarSimulacionCastigo && idx == 0) 2 else 0
-            val baseHistorial = if (omiHoy > 0) 4 else 6
             val etiquetaCorta = nombre.take(9).let { if (nombre.length > 9) "$it…" else it }
             BarraAdherenciaUi(
                 etiqueta = etiquetaCorta,
                 tituloCompleto = nombre,
-                tomadas = baseHistorial + tomHoy,
+                tomadas = tomHoy,
                 pospuestas = posHoy,
                 omitidas = omiHoy,
-                notaExtra = "Calculado de tus tomas de hoy ($tomHoy tomada(s), $posHoy pospuesta(s), $omiHoy omitida(s))"
+                notaExtra = "Tomas de hoy: $tomHoy tomada(s), $posHoy pospuesta(s), $omiHoy omitida(s)"
             )
         }
     } else {
-        listOf(
-            BarraAdherenciaUi(
-                etiqueta = "Losartán",
-                tituloCompleto = "Losartán 50 mg",
-                tomadas = if (forzarSimulacionCastigo) 5 else 14,
-                pospuestas = 0,
-                omitidas = if (forzarSimulacionCastigo) 2 else 0,
-                notaExtra = "Medicamento crítico cardiovascular • Meta ≥ 90%"
-            ),
-            BarraAdherenciaUi(
-                etiqueta = "Metform.",
-                tituloCompleto = "Metformina 850 mg",
-                tomadas = 13,
-                pospuestas = 1,
-                omitidas = 0,
-                notaExtra = "Toma matutina y nocturna con alimentos"
-            ),
-            BarraAdherenciaUi(
-                etiqueta = "Atorvast.",
-                tituloCompleto = "Atorvastatina 20 mg",
-                tomadas = 12,
-                pospuestas = 1,
-                omitidas = 1,
-                notaExtra = "Toma nocturna (21:00 PM)"
-            ),
-            BarraAdherenciaUi(
-                etiqueta = "Omeprazol",
-                tituloCompleto = "Omeprazol 20 mg",
-                tomadas = 13,
-                pospuestas = 1,
-                omitidas = 0,
-                notaExtra = "Toma en ayunas (08:00 AM)"
-            )
-        )
+        emptyList()
     }
 
-    val penalizacionActiva = (hoyOmitidas > 0 || adherenciaGlobalPct < 70) && !escudoActivadoHoy
+    val penalizacionReal = stats?.emblemaAgrietado ?: (hoyOmitidasReales > 0)
+    val penalizacionActiva = if (forzarSimulacionCastigo) {
+        !escudoActivadoHoy
+    } else {
+        penalizacionReal && !escudoActivadoHoy
+    }
 
-    val diasRachaSinCastigo = if (hoyTomadas >= 2) (12 + hoyTomadas) else (9 + hoyTomadas)
-    val diasRachaReal = if (penalizacionActiva) 0 else diasRachaSinCastigo
+    val diasRachaBase = stats?.rachaDias ?: state.rachaDias
+    val diasRachaReal = if (penalizacionActiva) 0 else diasRachaBase
 
     val nivelFuegoReal = when {
         diasRachaReal <= 0 -> NivelFuego.CENIZA
@@ -757,54 +770,43 @@ private fun calcularMetricasProgreso(
         else -> NivelFuego.MORADO_DORADO
     }
 
-    // Cálculo de XP y descenso real de Rango de Honor cuando hay penalización activa
-    val xpBase = 680
-    val xpGanadoHoy = hoyTomadas * 25
-    val xpBonoRacha = diasRachaSinCastigo * 8
-    val xpSinCastigo = (xpBase + xpGanadoHoy + xpBonoRacha).coerceIn(300, 1180)
-    val rangoPrevio = RangoHonor.entries.firstOrNull { xpSinCastigo in it.minXp..it.maxXp }
-        ?: RangoHonor.ORO
+    val xpBaseReal = (stats?.xpHonor ?: state.puntosXp).coerceAtLeast(0)
+    val rangoPrevio = RangoHonor.entries.firstOrNull { xpBaseReal in it.minXp..it.maxXp }
+        ?: RangoHonor.HIERRO
 
     val omitidasNoCriticas = (hoyOmitidas - hoyOmitidasCriticas).coerceAtLeast(0)
-    val xpPerdidoDirecto = (hoyPospuestas * 15) +
-        (omitidasNoCriticas * 40) +
-        (hoyOmitidasCriticas * 80) +
-        if (adherenciaGlobalPct < 70) 120 else 0
+    val xpPerdidoSimulado = (hoyPospuestas * 15) + (omitidasNoCriticas * 40) + (hoyOmitidasCriticas * 80)
 
-    val xpActual = if (penalizacionActiva) {
-        // Al perder la racha y omitir dosis, pierde el bono de racha + penalización de XP
-        // garantizando bajar al menos 1 Rango de Honor respecto a su rango previo
-        val xpTrasCastigo = xpSinCastigo - xpBonoRacha - xpPerdidoDirecto.coerceAtLeast(80)
-        val topeRangoInferior = (rangoPrevio.minXp - 25).coerceAtLeast(120)
-        minOf(xpTrasCastigo, topeRangoInferior).coerceIn(80, 1180)
+    val xpActual = if (forzarSimulacionCastigo && !escudoActivadoHoy) {
+        (xpBaseReal - xpPerdidoSimulado.coerceAtLeast(80)).coerceAtLeast(0)
     } else {
-        xpSinCastigo
+        xpBaseReal
     }
 
     val xpDeltaHoy = if (penalizacionActiva) {
-        -(xpPerdidoDirecto.coerceAtLeast(40))
+        -(xpPerdidoSimulado.coerceAtLeast(if (hoyOmitidas > 0) 40 else 0))
     } else {
-        xpGanadoHoy
+        hoyTomadas * 25
     }
 
     val rangoHonor = RangoHonor.entries.firstOrNull { xpActual in it.minXp..it.maxXp }
-        ?: RangoHonor.DIAMANTE
+        ?: if (xpActual >= RangoHonor.DIAMANTE.minXp) RangoHonor.DIAMANTE else RangoHonor.HIERRO
 
     val motivoPenalizacion = when {
-        escudoActivadoHoy && (hoyOmitidas > 0 || adherenciaGlobalPct < 70) ->
-            "Tu Escudo Protector absorbió la penalización de hoy. Tu llama y tu Rango ${rangoHonor.nombre} siguen a salvo."
-        hoyOmitidasCriticas > 0 ->
-            "Se detectó $hoyOmitidasCriticas omisión(es) en medicación crítica hoy (-80 XP c/u). Bajaste de ${rangoPrevio.nombre} a ${rangoHonor.nombre}."
-        hoyOmitidas > 0 ->
-            "Registraste $hoyOmitidas toma(s) omitida(s) hoy (-40 XP c/u), tu llama se apagó y bajaste a Rango ${rangoHonor.nombre}."
-        adherenciaGlobalPct < 70 ->
-            "Tu adherencia semanal cayó a $adherenciaGlobalPct% (< 70%) y bajaste a Rango ${rangoHonor.nombre}."
+        escudoActivadoHoy ->
+            "Tu Escudo Protector está activo hoy. Tu llama y tu Rango ${rangoHonor.nombre} siguen protegidos."
+        penalizacionActiva && hoyOmitidasCriticas > 0 ->
+            "Se detectó $hoyOmitidasCriticas omisión(es) en medicación crítica (-80 XP c/u). Rango actual: ${rangoHonor.nombre}."
+        penalizacionActiva && (hoyOmitidas > 0 || (stats?.totalOmitidas ?: 0) > 0) ->
+            "Registraste omisiones recientes, tu emblema está temporalmente agrietado y tu rango es ${rangoHonor.nombre}."
+        penalizacionActiva ->
+            "Penalización activa: completa ${stats?.diasLimpiosRecuperacion ?: 3} días limpios para restaurar el emblema."
         else ->
             "Sin penalizaciones activas. ¡Sigue tomando tus dosis a tiempo!"
     }
 
-    val escudosDisponibles = if (escudoActivadoHoy) 1 else 2
-    val diasParaRecuperarPosponer = if (penalizacionActiva) 3 else 0
+    val escudosDisponibles = (stats?.escudosRacha ?: state.escudosRacha).coerceAtLeast(0)
+    val diasParaRecuperarPosponer = if (penalizacionActiva) (stats?.diasLimpiosRecuperacion ?: 3) else 0
 
     return MetricasProgresoHonor(
         diasRachaReal = diasRachaReal,
@@ -1379,7 +1381,7 @@ private fun RachaFuegoHeroCard(
                             text = if (escudoActivadoHoy) {
                                 "Escudo Protector Activo Hoy"
                             } else {
-                                "Escudos de racha disponibles (${metricas.escudosDisponibles}/2)"
+                                "Escudos de racha disponibles (${metricas.escudosDisponibles})"
                             },
                             fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -1962,13 +1964,31 @@ private fun GraficaAdherenciaMejoradaCard(metricas: MetricasProgresoHonor) {
 
             Spacer(Modifier.height(8.dp))
 
-            // Área de gráfica: etiquetas superiores separadas del Box de 104.dp para que
-            // el escalado de fuente accesible nunca recorte el texto ni desalinee la línea Meta >= 90%
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = SoftWarmSurface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            // Área de gráfica con guardia de lista vacía
+            if (barras.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = SoftWarmSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (modoPorMedicamento) {
+                            "Aún no tienes medicamentos en tu botiquín para mostrar estadísticas individuales."
+                        } else {
+                            "Registra tu primer medicamento para visualizar la evolución de 7 días."
+                        },
+                        fontSize = 13.5.sp,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = SoftWarmSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
                     // Fila superior de porcentajes
                     Row(
@@ -2201,6 +2221,7 @@ private fun GraficaAdherenciaMejoradaCard(metricas: MetricasProgresoHonor) {
                     }
                 }
             }
+            }
 
             Spacer(Modifier.height(12.dp))
 
@@ -2307,17 +2328,26 @@ private fun MapaCalorClinicoCard(
     }
 
     // Filas = 4 bloques horarios (Mañana, Mediodía, Tarde, Noche) × 7 días (Lun..Dom)
-    val matrizBloqueDia: List<List<Int>> = remember(incidenciasHoyPorBloque) {
-        listOf(
-            // Mañana
-            listOf(0, 0, 1, 0, 0, 1, incidenciasHoyPorBloque[0].coerceAtMost(4)),
-            // Mediodía
-            listOf(0, 1, 0, 0, 1, 1, incidenciasHoyPorBloque[1].coerceAtMost(4)),
-            // Tarde
-            listOf(0, 0, 1, 1, 1, 2, (1 + incidenciasHoyPorBloque[2]).coerceAtMost(4)),
-            // Noche
-            listOf(1, 0, 0, 1, 2, 3, (2 + incidenciasHoyPorBloque[3]).coerceAtMost(4))
-        )
+    val mapaBackend = state.estadisticas?.mapaCalor.orEmpty()
+    val matrizBloqueDia: List<List<Int>> = remember(mapaBackend, incidenciasHoyPorBloque, simularPenalizacion) {
+        if (mapaBackend.size >= 4 && !simularPenalizacion) {
+            mapaBackend.take(4).map { bloqueDto ->
+                if (bloqueDto.dias.size >= 7) {
+                    bloqueDto.dias.take(7).map { it.omisiones }
+                } else {
+                    bloqueDto.valores.take(7).let { vals ->
+                        if (vals.size == 7) vals else List(7) { 0 }
+                    }
+                }
+            }
+        } else {
+            val hoyDiaIdx = (LocalDate.now().dayOfWeek.value - 1).coerceIn(0, 6)
+            List(4) { bloqueIdx ->
+                List(7) { diaIdx ->
+                    if (diaIdx == hoyDiaIdx) incidenciasHoyPorBloque[bloqueIdx].coerceAtMost(4) else 0
+                }
+            }
+        }
     }
 
     var bloqueSeleccionado by rememberSaveable { mutableIntStateOf(3) } // Noche por defecto
@@ -2546,7 +2576,15 @@ private fun MapaCalorClinicoCard(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Tu punto más vulnerable es el bloque de $peorBloqueNombre ($peorBloqueRango) con $peorBloqueTotal incidencias semanales (mayor concentración en $peorDiaNombre). $recomendacionPersonalizada",
+                            text = when {
+                                peorBloqueTotal <= 0 ->
+                                    state.estadisticas?.insightDebilidad?.takeIf { it.isNotBlank() }
+                                        ?: "Sin olvidos ni retrasos registrados esta semana. ¡Excelente consistencia en tus horarios!"
+                                else ->
+                                    (state.estadisticas?.insightDebilidad?.takeIf { it.isNotBlank() }
+                                        ?: "Tu punto más vulnerable es el bloque de $peorBloqueNombre ($peorBloqueRango) con $peorBloqueTotal incidencia(s) en $peorDiaNombre.") +
+                                        " $recomendacionPersonalizada"
+                            },
                             fontSize = 13.sp,
                             color = TextPrimary,
                             lineHeight = 18.sp
@@ -2909,5 +2947,215 @@ private fun compartirResumenClinico(
         context.startActivity(chooser)
     } catch (_: Exception) {
         Toast.makeText(context, "No se encontró una app para compartir el reporte", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PrediccionMlCard(
+    state: HomeUiState,
+    onCambiarAlgoritmo: (String) -> Unit,
+    onRefrescarEvaluacion: () -> Unit,
+    onCargarTorneo: () -> Unit
+) {
+    var mostrarTorneo by rememberSaveable { mutableStateOf(false) }
+    val eval = state.evaluacionMl
+    val algoritmos = listOf(
+        "random_forest" to "Random Forest",
+        "decision_tree" to "Árbol Decisión",
+        "knn" to "KNN"
+    )
+    val nivelColor = when (eval?.nivelRiesgo?.uppercase()) {
+        "ALTO" -> Color(0xFFB71C1C)
+        "MEDIO" -> Color(0xFFE65100)
+        else -> Color(0xFF15803D)
+    }
+    val nivelBg = when (eval?.nivelRiesgo?.uppercase()) {
+        "ALTO" -> Color(0xFFFFEBEE)
+        "MEDIO" -> Color(0xFFFFF8E1)
+        else -> Color(0xFFE8F5E9)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = CardBackground,
+        border = BorderStroke(1.dp, InputBorderColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        tint = TealPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "PREDICCIÓN ML DE ABANDONO",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp,
+                        color = TealPrimary
+                    )
+                }
+                OutlinedButton(
+                    onClick = onRefrescarEvaluacion,
+                    enabled = !state.cargandoMl,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    if (state.cargandoMl) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("Evaluar", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                algoritmos.forEach { (clave, titulo) ->
+                    FilterChip(
+                        selected = state.algoritmoMlSeleccionado == clave,
+                        onClick = { onCambiarAlgoritmo(clave) },
+                        label = { Text(titulo, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+
+            if (eval == null) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = SoftWarmSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Toca \"Evaluar\" para calcular tu probabilidad de abandono con IA clínica.",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = nivelBg,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Riesgo ${eval.nivelRiesgo} • ${eval.modelo}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = nivelColor
+                            )
+                            Text(
+                                text = "Adherencia proyectada: ${eval.probabilidadAdherenciaPct}%",
+                                fontSize = 12.5.sp,
+                                color = TextPrimary
+                            )
+                        }
+                        Text(
+                            text = "${eval.probabilidadAbandonoPct.toInt()}%",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = nivelColor
+                        )
+                    }
+                }
+
+                if (eval.factoresRiesgo.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Factores detectados:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        eval.factoresRiesgo.forEach { factor ->
+                            Text("• $factor", fontSize = 12.5.sp, color = TextSecondary)
+                        }
+                    }
+                }
+
+                if (eval.recomendacionClinica.isNotBlank()) {
+                    Text(
+                        text = eval.recomendacionClinica,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TealDark
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val next = !mostrarTorneo
+                    mostrarTorneo = next
+                    if (next && state.torneoModelos == null) {
+                        onCargarTorneo()
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = if (mostrarTorneo) "Ocultar comparativa de algoritmos (P05)" else "Ver comparativa de modelos (Torneo P05)",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TealPrimary
+                )
+            }
+
+            if (mostrarTorneo) {
+                val torneo = state.torneoModelos
+                if (torneo == null) {
+                    Text(
+                        text = "Cargando métricas comparativas...",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SoftWarmSurface,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            torneo.tablaComparativa.forEach { m ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = if (m.clave == torneo.algoritmoActivo) "★ ${m.nombre}" else m.nombre,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "F1 ${m.f1ScorePct}% • Acc ${m.exactitudValPct}%",
+                                        fontSize = 11.5.sp,
+                                        color = TealDark,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, String, func
+from sqlalchemy import Date, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -17,4 +17,6 @@ class Usuario(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     fecha_nacimiento: Mapped[date | None] = mapped_column(Date, nullable=True)
     rol: Mapped[str] = mapped_column(String(30), default="paciente")
+    escudo_usado_fecha: Mapped[date | None] = mapped_column(Date, nullable=True)
+    escudos_usados_total: Mapped[int] = mapped_column(Integer, default=0)
     fecha_registro: Mapped[datetime] = mapped_column(server_default=func.current_timestamp())

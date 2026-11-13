@@ -77,6 +77,18 @@ def asegurar_esquema_mysql() -> None:
                             "ALTER TABLE usuario ADD COLUMN rol VARCHAR(30) NOT NULL DEFAULT 'paciente'"
                         )
                     )
+                if "escudo_usado_fecha" not in existentes_usr:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE usuario ADD COLUMN escudo_usado_fecha DATE NULL"
+                        )
+                    )
+                if "escudos_usados_total" not in existentes_usr:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE usuario ADD COLUMN escudos_usados_total INT NOT NULL DEFAULT 0"
+                        )
+                    )
 
             # Tabla persistente de alertas para la Vista del Cuidador
             conn.execute(
@@ -95,6 +107,40 @@ def asegurar_esquema_mysql() -> None:
                     "atendida BOOLEAN NOT NULL DEFAULT FALSE, "
                     "fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     "INDEX idx_alerta_usuario (id_usuario)"
+                    ")"
+                )
+            )
+
+            # Tabla de vinculación real multi-dispositivo paciente <-> cuidador
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS vinculacion_cuidador ("
+                    "id_vinculacion INT AUTO_INCREMENT PRIMARY KEY, "
+                    "id_paciente INT NOT NULL, "
+                    "id_cuidador INT NULL, "
+                    "codigo_vinculacion VARCHAR(16) NOT NULL UNIQUE, "
+                    "estado VARCHAR(20) NOT NULL DEFAULT 'pendiente', "
+                    "parentesco VARCHAR(100) NULL, "
+                    "expira_en DATETIME NOT NULL, "
+                    "fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    "fecha_vinculacion DATETIME NULL, "
+                    "INDEX idx_vinc_paciente (id_paciente), "
+                    "INDEX idx_vinc_cuidador (id_cuidador)"
+                    ")"
+                )
+            )
+
+            # Códigos de verificación de un solo uso para recuperación de contraseña
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS password_reset_code ("
+                    "id_reset INT AUTO_INCREMENT PRIMARY KEY, "
+                    "id_usuario INT NOT NULL, "
+                    "codigo_hash VARCHAR(255) NOT NULL, "
+                    "expira_en DATETIME NOT NULL, "
+                    "usado BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    "INDEX idx_reset_usuario (id_usuario)"
                     ")"
                 )
             )

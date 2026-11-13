@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,25 +22,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Healing
 import androidx.compose.material.icons.outlined.MedicalInformation
 import androidx.compose.material.icons.outlined.Medication
-import androidx.compose.material.icons.outlined.AddCircleOutline
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PauseCircleOutline
+import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Vaccines
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,10 +66,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.medreminder.ai.ui.theme.AlertRedBg
 import com.medreminder.ai.ui.theme.AlertRedText
 import com.medreminder.ai.ui.theme.CardBackground
@@ -81,10 +97,26 @@ fun BotiquinScreenContent(
     onAddMedicamentoClick: () -> Unit,
     onEscanearRecetaClick: () -> Unit = {},
     onRecargarStock: (Int, Int) -> Unit = { _, _ -> },
-    onEliminarMedicamento: (Int) -> Unit = {}
+    onEliminarMedicamento: (Int) -> Unit = {},
+    onEditarMedicamento: (
+        idMedicamento: Int,
+        nombre: String,
+        principioActivo: String?,
+        dosis: String,
+        cantidadStock: Int,
+        forma: FormaFarmaceutica,
+        colorPastilla: String,
+        instruccionesToma: String?,
+        permitePosponer: Boolean,
+        esCritico: Boolean,
+        contraindicaciones: String?
+    ) -> Unit = { _, _, _, _, _, _, _, _, _, _, _ -> },
+    onActualizarTratamiento: (idTratamiento: Int, frecuenciaHoras: Int?, estado: String?) -> Unit = { _, _, _ -> }
 ) {
     val a11y = LocalAccessibilitySettings.current
     val totalMeds = state.botiquinItems.size
+    var refillDialogItem by remember { mutableStateOf<BotiquinItemUi?>(null) }
+    var editDialogItem by remember { mutableStateOf<BotiquinItemUi?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -262,14 +294,60 @@ fun BotiquinScreenContent(
                     BotiquinMedCard(
                         item = item,
                         iconIndex = index,
-                        onRecargarStock = { onRecargarStock(item.idMedicamento, 30) },
+                        onRecargarStock = { refillDialogItem = item },
+                        onEditarMedicamento = { editDialogItem = item },
+                        onToggleTratamientoEstado = {
+                            val idTrat = item.idTratamiento ?: return@BotiquinMedCard
+                            val nextEstado = if (item.tratamientoEstado == "pausado") "activo" else "pausado"
+                            onActualizarTratamiento(idTrat, null, nextEstado)
+                        },
                         onEliminarMedicamento = { onEliminarMedicamento(item.idMedicamento) }
                     )
                 }
             }
         }
 
+        refillDialogItem?.let { target ->
+            RecargarStockDialog(
+                item = target,
+                onDismiss = { refillDialogItem = null },
+                onConfirm = { cantidad ->
+                    onRecargarStock(target.idMedicamento, cantidad)
+                    refillDialogItem = null
+                }
+            )
+        }
 
+        editDialogItem?.let { target ->
+            EditarMedicamentoDialog(
+                item = target,
+                onDismiss = { editDialogItem = null },
+                onGuardar = { nombre, principio, dosis, stock, forma, instrucciones, permitePosponer, esCritico, contraindicaciones, nuevaFrec, nuevoEstado ->
+                    onEditarMedicamento(
+                        target.idMedicamento,
+                        nombre,
+                        principio,
+                        dosis,
+                        stock,
+                        forma,
+                        target.colorPastilla,
+                        instrucciones,
+                        permitePosponer,
+                        esCritico,
+                        contraindicaciones
+                    )
+                    val idTrat = target.idTratamiento
+                    if (idTrat != null && (nuevaFrec != target.frecuenciaHoras || nuevoEstado != target.tratamientoEstado)) {
+                        onActualizarTratamiento(
+                            idTrat,
+                            if (nuevaFrec != target.frecuenciaHoras) nuevaFrec else null,
+                            if (nuevoEstado != target.tratamientoEstado) nuevoEstado else null
+                        )
+                    }
+                    editDialogItem = null
+                }
+            )
+        }
     }
 }
 
@@ -305,11 +383,14 @@ private fun SupplyRingIndicator(count: Int, progress: Float) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BotiquinMedCard(
     item: BotiquinItemUi,
     iconIndex: Int,
     onRecargarStock: () -> Unit = {},
+    onEditarMedicamento: () -> Unit = {},
+    onToggleTratamientoEstado: () -> Unit = {},
     onEliminarMedicamento: () -> Unit = {}
 ) {
     val a11y = LocalAccessibilitySettings.current
@@ -385,19 +466,45 @@ private fun BotiquinMedCard(
                 }
             }
 
-            if (item.esCritico || !item.permitePosponer) {
+            if (item.esCritico || !item.permitePosponer || item.idTratamiento != null) {
                 Spacer(Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFFFEBEE)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "DOSIS CRÍTICA • NO POSPONIBLE",
-                        color = Color(0xFFC62828),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
-                    )
+                    if (item.esCritico || !item.permitePosponer) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFFEBEE)
+                        ) {
+                            Text(
+                                text = "DOSIS CRÍTICA • NO POSPONIBLE",
+                                color = Color(0xFFC62828),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
+                            )
+                        }
+                    }
+                    if (item.idTratamiento != null) {
+                        val isPaused = item.tratamientoEstado == "pausado"
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isPaused) Color(0xFFFFF8E1) else TealBadgeBg
+                        ) {
+                            Text(
+                                text = if (isPaused) {
+                                    "PAUSADO • Cada ${item.frecuenciaHoras} h"
+                                } else {
+                                    "Cada ${item.frecuenciaHoras} h • Activo"
+                                },
+                                color = if (isPaused) Color(0xFF9A6700) else TealBadgeText,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -443,11 +550,11 @@ private fun BotiquinMedCard(
 
             Spacer(Modifier.height(14.dp))
 
-            // Acciones: Recargar stock y Eliminar
-            Row(
+            // Acciones: Recargar stock, Editar, Pausar/Reanudar y Eliminar
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onRecargarStock,
@@ -460,16 +567,53 @@ private fun BotiquinMedCard(
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(text = "Recargar (30)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(5.dp))
+                    Text(text = "Recargar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                Spacer(Modifier.width(8.dp))
+                OutlinedButton(
+                    onClick = onEditarMedicamento,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TealDark),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(text = "Editar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                if (item.idTratamiento != null) {
+                    val isPaused = item.tratamientoEstado == "pausado"
+                    OutlinedButton(
+                        onClick = onToggleTratamientoEstado,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isPaused) TealPrimary else Color(0xFF9A6700)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Outlined.PlayCircleOutline else Icons.Outlined.PauseCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = if (isPaused) "Reanudar" else "Pausar",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
 
                 var showConfirmDelete by remember { mutableStateOf(false) }
                 IconButton(
                     onClick = { showConfirmDelete = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
@@ -498,6 +642,276 @@ private fun BotiquinMedCard(
                             }
                         }
                     )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RecargarStockDialog(
+    item: BotiquinItemUi,
+    onDismiss: () -> Unit,
+    onConfirm: (cantidadExtra: Int) -> Unit
+) {
+    var cantidadTexto by remember { mutableStateOf("30") }
+    val presets = listOf(10, 20, 30, 60)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Recargar ${item.nombre}", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Existencia actual: ${item.stockActual} ${item.unidadTexto}. Elige cuánto deseas agregar:",
+                    fontSize = 13.5.sp,
+                    color = TextSecondary
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = cantidadTexto == preset.toString(),
+                            onClick = { cantidadTexto = preset.toString() },
+                            label = { Text("+$preset") }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = cantidadTexto,
+                    onValueChange = { cantidadTexto = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Cantidad personalizada (${item.unidadTexto})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val qty = cantidadTexto.toIntOrNull()?.coerceAtLeast(1) ?: 30
+                    onConfirm(qty)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
+            ) {
+                Text("Agregar", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EditarMedicamentoDialog(
+    item: BotiquinItemUi,
+    onDismiss: () -> Unit,
+    onGuardar: (
+        nombre: String,
+        principioActivo: String?,
+        dosis: String,
+        cantidadStock: Int,
+        forma: FormaFarmaceutica,
+        instrucciones: String?,
+        permitePosponer: Boolean,
+        esCritico: Boolean,
+        contraindicaciones: String?,
+        frecuenciaHoras: Int,
+        estadoTratamiento: String?
+    ) -> Unit
+) {
+    var nombre by remember { mutableStateOf(item.nombre) }
+    var principio by remember { mutableStateOf(item.principioActivo ?: "") }
+    var dosis by remember { mutableStateOf(item.dosis) }
+    var stockTexto by remember { mutableStateOf(item.stockActual.toString()) }
+    var forma by remember { mutableStateOf(item.formaFarmaceutica) }
+    var instrucciones by remember { mutableStateOf(item.instruccionesToma ?: "") }
+    var esCritico by remember { mutableStateOf(item.esCritico) }
+    var permitePosponer by remember { mutableStateOf(item.permitePosponer) }
+    var contraindicaciones by remember { mutableStateOf(item.contraindicaciones ?: "") }
+    var frecuenciaHoras by remember { mutableStateOf(item.frecuenciaHoras) }
+    var estadoTrat by remember { mutableStateOf(item.tratamientoEstado ?: "activo") }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = CardBackground,
+            modifier = Modifier
+                .fillMaxWidth(0.93f)
+                .padding(14.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Editar Medicamento",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                }
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre comercial") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                OutlinedTextField(
+                    value = principio,
+                    onValueChange = { principio = it },
+                    label = { Text("Principio activo (genérico)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = dosis,
+                        onValueChange = { dosis = it },
+                        label = { Text("Dosis") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    OutlinedTextField(
+                        value = stockTexto,
+                        onValueChange = { stockTexto = it.filter { c -> c.isDigit() } },
+                        label = { Text("Existencias") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(0.7f),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+
+                Text("Forma farmacéutica:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FormaFarmaceutica.entries.forEach { f ->
+                        FilterChip(
+                            selected = forma == f,
+                            onClick = { forma = f },
+                            label = { Text(f.shortLabel) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = instrucciones,
+                    onValueChange = { instrucciones = it },
+                    label = { Text("Instrucciones de toma") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                if (item.idTratamiento != null) {
+                    Text("Frecuencia del recordatorio:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(4, 6, 8, 12, 24).forEach { h ->
+                            FilterChip(
+                                selected = frecuenciaHoras == h,
+                                onClick = { frecuenciaHoras = h },
+                                label = { Text("Cada ${h}h") }
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (estadoTrat == "pausado") "Recordatorios pausados" else "Tratamiento activo",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Switch(
+                            checked = estadoTrat == "activo",
+                            onCheckedChange = { checked ->
+                                estadoTrat = if (checked) "activo" else "pausado"
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = TealPrimary)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Medicamento crítico (alerta urgente)", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Switch(
+                        checked = esCritico,
+                        onCheckedChange = {
+                            esCritico = it
+                            if (it) permitePosponer = false
+                        }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Permitir posponer", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Switch(
+                        checked = permitePosponer,
+                        onCheckedChange = { if (!esCritico) permitePosponer = it }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = contraindicaciones,
+                    onValueChange = { contraindicaciones = it },
+                    label = { Text("Contraindicaciones / Notas médicas") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        if (nombre.isNotBlank()) {
+                            onGuardar(
+                                nombre.trim(),
+                                principio.trim().ifBlank { null },
+                                dosis.trim().ifBlank { "1 comprimido" },
+                                stockTexto.toIntOrNull()?.coerceAtLeast(0) ?: item.stockActual,
+                                forma,
+                                instrucciones.trim().ifBlank { null },
+                                permitePosponer,
+                                esCritico,
+                                contraindicaciones.trim().ifBlank { null },
+                                frecuenciaHoras,
+                                estadoTrat
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Text("Guardar Cambios", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }

@@ -80,3 +80,12 @@ class EstadisticasOut(BaseModel):
     adherencia_por_medicamento: list[AdherenciaMedicamentoOut]
     mapa_calor: list[BloqueMapaCalorOut]
     insight_debilidad: str
+    escudo_activo_hoy: bool = False
+    escudo_usado_fecha: str | None = None
+
+
+class EscudoActivarResponse(BaseModel):
+    escudo_activado: bool
+    escudos_racha: int
+    escudo_usado_fecha: str
+    mensaje: str

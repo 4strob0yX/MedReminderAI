@@ -21,12 +21,40 @@ data class UpdatePerfilEdadRequestDto(
     val rol: String? = null
 )
 
+data class UpdatePerfilRequestDto(
+    @SerializedName("nombre_completo") val nombreCompleto: String? = null,
+    @SerializedName("fecha_nacimiento") val fechaNacimiento: String? = null,
+    val rol: String? = null
+)
+
+data class ChangePasswordRequestDto(
+    @SerializedName("current_password") val currentPassword: String,
+    @SerializedName("new_password") val newPassword: String
+)
+
+data class SimpleMensajeResponseDto(
+    val mensaje: String? = null,
+    val detail: String? = null
+)
+
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class ForgotPasswordResponse(
+    val mensaje: String? = null,
+    val detail: String? = null,
+    @SerializedName("expira_en_minutos") val expiraEnMinutos: Int = 15,
+    @SerializedName("demo_code") val demoCode: String? = null
+)
+
 data class RefreshRequest(
     @SerializedName("refresh_token") val refreshToken: String
 )
 
 data class ResetPasswordRequest(
     val email: String,
+    val codigo: String,
     @SerializedName("new_password") val newPassword: String
 )
 

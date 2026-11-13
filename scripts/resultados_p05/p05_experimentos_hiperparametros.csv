@@ -1,0 +1,15 @@
+Experimento,Parámetro,Exactitud_Val,F1_Score
+A (KNN),n_neighbors=3,90.0,91.8918918918919
+A (KNN),n_neighbors=5,93.33333333333333,94.44444444444444
+A (KNN),n_neighbors=7,93.33333333333333,94.44444444444444
+A (KNN),n_neighbors=9,93.33333333333333,94.44444444444444
+A (KNN),n_neighbors=15,90.0,92.3076923076923
+B (Random Forest),n_estimators=50,86.66666666666667,90.0
+B (Random Forest),n_estimators=100,86.66666666666667,90.0
+B (Random Forest),n_estimators=200,90.0,92.3076923076923
+B (Random Forest),n_estimators=500,90.0,92.3076923076923
+C (Decision Tree),max_depth=2,73.33333333333333,78.94736842105263
+C (Decision Tree),max_depth=3,76.66666666666667,81.08108108108108
+C (Decision Tree),max_depth=5,80.0,83.33333333333334
+C (Decision Tree),max_depth=8,73.33333333333333,78.94736842105263
+C (Decision Tree),max_depth=Sin límite,73.33333333333333,78.94736842105263

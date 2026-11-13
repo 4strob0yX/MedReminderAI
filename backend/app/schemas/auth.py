@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, EmailStr, Field, computed_field, field_validator
 
@@ -36,8 +37,20 @@ class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    mensaje: str
+    detail: str
+    expira_en_minutos: int = 15
+    demo_code: str | None = None
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+    codigo: str = Field(min_length=6, max_length=12)
     new_password: str = Field(
         min_length=8,
         validation_alias=AliasChoices("new_password", "password", "nueva_password"),
@@ -48,6 +61,34 @@ class PasswordResetRequest(BaseModel):
     def _bcrypt_limit(cls, v: str) -> str:
         if len(v.encode("utf-8")) > 72:
             raise ValueError("La contrasena no puede exceder 72 bytes")
+        return v
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _bcrypt_limit(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("La contrasena no puede exceder 72 bytes")
+        return v
+
+
+class UpdatePerfilRequest(BaseModel):
+    nombre_completo: str | None = Field(default=None, min_length=1, max_length=255)
+    fecha_nacimiento: date | None = None
+    rol: Literal["paciente", "cuidador"] | None = None
+
+    @field_validator("nombre_completo")
+    @classmethod
+    def _strip_nombre_opt(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            raise ValueError("El nombre no puede estar vacio")
         return v
 
 

@@ -1,7 +1,10 @@
 package com.medreminder.ai.data.repository
 
+import com.medreminder.ai.data.local.LocalCacheStore
 import com.medreminder.ai.data.local.TokenStore
 import com.medreminder.ai.data.remote.AuthApi
+import com.medreminder.ai.data.remote.ForgotPasswordRequest
+import com.medreminder.ai.data.remote.ForgotPasswordResponse
 import com.medreminder.ai.data.remote.LoginRequest
 import com.medreminder.ai.data.remote.RegisterRequest
 import com.medreminder.ai.data.remote.ResetPasswordRequest
@@ -13,7 +16,8 @@ import java.io.IOException
 
 class AuthRepository(
     private val api: AuthApi,
-    private val tokenStore: TokenStore
+    private val tokenStore: TokenStore,
+    private val localCacheStore: LocalCacheStore? = null
 ) {
     fun isLoggedIn(): Boolean = tokenStore.accessToken != null
 
@@ -39,9 +43,30 @@ class AuthRepository(
             )
         }
 
-    suspend fun resetPassword(email: String, newPassword: String): Result<String> =
+    suspend fun forgotPassword(email: String): Result<ForgotPasswordResponse> =
         try {
-            val res = api.resetPassword(ResetPasswordRequest(email = email.trim(), newPassword = newPassword))
+            val res = api.forgotPassword(ForgotPasswordRequest(email = email.trim()))
+            Result.success(res)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: HttpException) {
+            val detail = parseApiErrorDetail(e.response()?.errorBody()?.string())
+            Result.failure(AuthException(detail ?: "No se pudo solicitar el código (${e.code()})"))
+        } catch (e: IOException) {
+            Result.failure(AuthException("Se requiere conexión a internet."))
+        } catch (e: Exception) {
+            Result.failure(AuthException(e.message ?: "Error al solicitar el código de recuperación"))
+        }
+
+    suspend fun resetPassword(email: String, codigo: String, newPassword: String): Result<String> =
+        try {
+            val res = api.resetPassword(
+                ResetPasswordRequest(
+                    email = email.trim(),
+                    codigo = codigo.trim(),
+                    newPassword = newPassword
+                )
+            )
             Result.success(res.message ?: res.detail ?: "Contraseña actualizada correctamente.")
         } catch (e: CancellationException) {
             throw e
@@ -54,7 +79,10 @@ class AuthRepository(
             Result.failure(AuthException(e.message ?: "Error al restablecer la contraseña"))
         }
 
-    fun logout() = tokenStore.clear()
+    fun logout() {
+        tokenStore.clear()
+        localCacheStore?.clearAll()
+    }
 
     private suspend fun call(block: suspend () -> TokenResponse): Result<Unit> =
         try {

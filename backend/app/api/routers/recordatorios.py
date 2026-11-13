@@ -18,10 +18,12 @@ from app.schemas.alergia import AlergiaOut
 from app.schemas.auth import UsuarioOut
 from app.schemas.contacto import ContactoOut
 from app.schemas.medicamento import MedicamentoOut
-from app.schemas.recordatorio import EstadisticasOut, RecordatorioOut
+from app.schemas.recordatorio import EscudoActivarResponse, EstadisticasOut, RecordatorioOut
 from app.schemas.tratamiento import TratamientoOut
 from app.api.routers.cuidador import registrar_alerta_cuidador_db
 from app.services.recordatorio_service import (
+    EscudoNoDisponibleError,
+    activar_escudo_racha,
     asegurar_horizonte_recordatorios,
     calcular_estadisticas_usuario,
     esta_posponer_bloqueado,
@@ -197,6 +199,24 @@ def obtener_estadisticas(
     return calcular_estadisticas_usuario(
         db=db, user=user, tz_offset_minutes=tz_offset_minutes
     )
+
+
+@router.post("/escudo", response_model=EscudoActivarResponse)
+def activar_escudo(
+    tz_offset_minutes: int = Query(
+        default=0,
+        description="Desfase horario local respecto a UTC en minutos (ej. -360 para UTC-6)",
+    ),
+    user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Consume 1 escudo de racha disponible y protege la racha / penalización de hoy."""
+    try:
+        return activar_escudo_racha(
+            db=db, user=user, tz_offset_minutes=tz_offset_minutes
+        )
+    except EscudoNoDisponibleError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.get("", response_model=list[RecordatorioOut])

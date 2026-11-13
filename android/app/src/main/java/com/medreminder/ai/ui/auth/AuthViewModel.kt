@@ -29,9 +29,14 @@ data class AuthUiState(
     val isAuthenticated: Boolean = false,
     val showResetPasswordDialog: Boolean = false,
     val resetEmail: String = "",
+    val resetCode: String = "",
     val resetNewPassword: String = "",
     val resetEmailError: String? = null,
+    val resetCodeError: String? = null,
     val resetPasswordError: String? = null,
+    val resetCodeSent: Boolean = false,
+    val resetInfoMessage: String? = null,
+    val resetDemoCodeHint: String? = null,
     val isResettingPassword: Boolean = false
 )
 
@@ -57,9 +62,14 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         it.copy(
             showResetPasswordDialog = true,
             resetEmail = it.email,
+            resetCode = "",
             resetNewPassword = "",
             resetEmailError = null,
-            resetPasswordError = null
+            resetCodeError = null,
+            resetPasswordError = null,
+            resetCodeSent = false,
+            resetInfoMessage = null,
+            resetDemoCodeHint = null
         )
     }
 
@@ -71,8 +81,47 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         it.copy(resetEmail = v.trim(), resetEmailError = null)
     }
 
+    fun onResetCodeChange(v: String) = _state.update {
+        it.copy(resetCode = v.trim().take(12), resetCodeError = null)
+    }
+
     fun onResetNewPasswordChange(v: String) = _state.update {
         it.copy(resetNewPassword = v, resetPasswordError = null)
+    }
+
+    fun onRequestResetCode() {
+        val s = _state.value
+        if (s.isResettingPassword) return
+        val emailErr = if (!android.util.Patterns.EMAIL_ADDRESS.matcher(s.resetEmail).matches()) {
+            "Ingresa un correo electrónico válido"
+        } else null
+        if (emailErr != null) {
+            _state.update { it.copy(resetEmailError = emailErr) }
+            return
+        }
+        _state.update { it.copy(isResettingPassword = true, resetEmailError = null, resetCodeError = null) }
+        viewModelScope.launch {
+            val res = repository.forgotPassword(s.resetEmail)
+            _state.update {
+                res.fold(
+                    onSuccess = { resp ->
+                        it.copy(
+                            isResettingPassword = false,
+                            resetCodeSent = true,
+                            resetInfoMessage = resp.mensaje ?: resp.detail
+                                ?: "Código enviado. Vigencia de ${resp.expiraEnMinutos} min.",
+                            resetDemoCodeHint = resp.demoCode
+                        )
+                    },
+                    onFailure = { err ->
+                        it.copy(
+                            isResettingPassword = false,
+                            resetEmailError = err.message ?: "No se pudo enviar el código"
+                        )
+                    }
+                )
+            }
+        }
     }
 
     fun onSubmitResetPassword() {
@@ -82,18 +131,27 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         val emailErr = if (!android.util.Patterns.EMAIL_ADDRESS.matcher(s.resetEmail).matches()) {
             "Ingresa un correo electrónico válido"
         } else null
+        val codeErr = if (s.resetCode.length < 6) {
+            "Ingresa el código de verificación (6 dígitos)"
+        } else null
         val passErr = if (s.resetNewPassword.length < 8) {
             "La nueva contraseña debe tener mínimo 8 caracteres"
         } else null
 
-        if (emailErr != null || passErr != null) {
-            _state.update { it.copy(resetEmailError = emailErr, resetPasswordError = passErr) }
+        if (emailErr != null || codeErr != null || passErr != null) {
+            _state.update {
+                it.copy(
+                    resetEmailError = emailErr,
+                    resetCodeError = codeErr,
+                    resetPasswordError = passErr
+                )
+            }
             return
         }
 
         _state.update { it.copy(isResettingPassword = true, errorMessage = null) }
         viewModelScope.launch {
-            val res = repository.resetPassword(s.resetEmail, s.resetNewPassword)
+            val res = repository.resetPassword(s.resetEmail, s.resetCode, s.resetNewPassword)
             _state.update {
                 res.fold(
                     onSuccess = { msg ->

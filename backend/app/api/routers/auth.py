@@ -5,6 +5,9 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.usuario import Usuario
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     PasswordResetRequest,
     PasswordResetResponse,
@@ -12,6 +15,7 @@ from app.schemas.auth import (
     RegisterRequest,
     TokenResponse,
     UpdatePerfilEdadRequest,
+    UpdatePerfilRequest,
     UsuarioOut,
 )
 from app.services import auth_service
@@ -51,10 +55,20 @@ def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
         )
 
 
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    return auth_service.request_password_reset(db, data)
+
+
 @router.post("/reset-password", response_model=PasswordResetResponse)
 def reset_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
     try:
         return auth_service.reset_password(db, data)
+    except auth_service.InvalidResetCode:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="El código de verificación es inválido o ha expirado",
+        )
     except auth_service.UserNotFound:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
@@ -65,6 +79,34 @@ def reset_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UsuarioOut)
 def me(user: Usuario = Depends(get_current_user)):
     return user
+
+
+@router.patch("/me", response_model=UsuarioOut)
+def actualizar_perfil(
+    body: UpdatePerfilRequest,
+    user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return auth_service.update_perfil(db, user, body)
+
+
+@router.post("/change-password")
+def cambiar_password(
+    body: ChangePasswordRequest,
+    user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        auth_service.change_password(db, user, body)
+        return {
+            "mensaje": "Contraseña actualizada correctamente",
+            "detail": "Contraseña actualizada correctamente",
+        }
+    except auth_service.InvalidCredentials:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="La contraseña actual no es correcta",
+        )
 
 
 @router.patch("/me/edad", response_model=UsuarioOut)

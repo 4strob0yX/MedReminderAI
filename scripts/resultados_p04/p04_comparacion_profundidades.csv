@@ -1,0 +1,9 @@
+profundidad,exactitud_train,exactitud_val,diferencia,diagnostico
+1,74.44,60.0,14.44,Subajuste (Underfitting) - Modelo demasiado simple
+2,81.11,73.33,7.78,Ajuste Óptimo (Buen Balance)
+3,87.78,76.67,11.11,Ajuste Intermedio
+4,93.33,73.33,20.0,Ajuste Intermedio
+5,98.89,80.0,18.89,Sobreajuste (Overfitting) - Memoriza ruido
+8,100.0,73.33,26.67,Sobreajuste (Overfitting) - Memoriza ruido
+10,100.0,73.33,26.67,Sobreajuste (Overfitting) - Memoriza ruido
+Sin límite,100.0,73.33,26.67,Sobreajuste (Overfitting) - Memoriza ruido

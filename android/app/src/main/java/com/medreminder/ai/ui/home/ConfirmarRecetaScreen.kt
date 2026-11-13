@@ -1,6 +1,9 @@
 package com.medreminder.ai.ui.home
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,9 +68,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.medreminder.ai.ui.theme.LocalAccessibilitySettings
 import com.medreminder.ai.ui.theme.ThemeMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import kotlin.coroutines.resume
+import kotlin.math.max
 
 private const val RECETA_EJEMPLO_1 =
     "Dra. Elena Vargas - Medicina Interna (Ced. 482910)\n" +
@@ -96,13 +109,30 @@ fun ConfirmarRecetaScreen(
     val borderLight = if (isNight) Color(0xFF233B43) else Color(0xFFDCE8EB)
 
     val context = LocalContext.current
-    var textoOcrEditable by remember { mutableStateOf(RECETA_EJEMPLO_1) }
+    val scope = rememberCoroutineScope()
+    var textoOcrEditable by remember { mutableStateOf("") }
     var fotoCapturadaLabel by remember { mutableStateOf<String?>(null) }
+    var isRunningOcr by remember { mutableStateOf(false) }
 
-    // Al abrir por primera vez sin ítems previos, analizamos automáticamente la receta cargada con Ollama
-    LaunchedEffect(Unit) {
-        if (state.itemsRecetaEditables.isEmpty() && !state.analizandoRecetaIa) {
-            onAnalizarReceta(textoOcrEditable, null)
+    fun procesarBitmapReceta(rawBitmap: Bitmap, origenLabel: String) {
+        scope.launch {
+            isRunningOcr = true
+            fotoCapturadaLabel = "$origenLabel • Ejecutando OCR en dispositivo..."
+            val (ocrText, b64, dims) = withContext(Dispatchers.Default) {
+                val scaled = scaleBitmapForOcr(rawBitmap)
+                val recognized = runMlKitOcr(scaled).trim()
+                val encoded = encodeBitmapJpegBase64(scaled)
+                Triple(recognized, encoded, "${scaled.width}x${scaled.height} px")
+            }
+            isRunningOcr = false
+            // Limpiamos cualquier texto anterior/demo para no contaminar el escaneo real
+            textoOcrEditable = ocrText
+            fotoCapturadaLabel = if (ocrText.isNotBlank()) {
+                "$origenLabel ($dims) • OCR detectó ${ocrText.length} caracteres"
+            } else {
+                "$origenLabel ($dims) • Sin texto legible por OCR, enviando imagen a IA"
+            }
+            onAnalizarReceta(ocrText.ifBlank { null }, b64)
         }
     }
 
@@ -110,11 +140,7 @@ fun ConfirmarRecetaScreen(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
         if (bitmap != null) {
-            val bos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, bos)
-            val b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
-            fotoCapturadaLabel = "Foto de receta capturada (${bitmap.width}x${bitmap.height} px)"
-            onAnalizarReceta(textoOcrEditable, b64)
+            procesarBitmapReceta(bitmap, "Foto capturada")
         }
     }
 
@@ -122,12 +148,16 @@ fun ConfirmarRecetaScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            val bytes = runCatching {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrNull()
-            val b64 = bytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
-            fotoCapturadaLabel = "Imagen seleccionada desde galería"
-            onAnalizarReceta(textoOcrEditable, b64)
+            scope.launch {
+                val bitmap = withContext(Dispatchers.IO) {
+                    decodeBitmapFromUri(context, uri)
+                }
+                if (bitmap != null) {
+                    procesarBitmapReceta(bitmap, "Imagen de galería")
+                } else {
+                    fotoCapturadaLabel = "No se pudo leer la imagen seleccionada"
+                }
+            }
         }
     }
 
@@ -320,17 +350,29 @@ fun ConfirmarRecetaScreen(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFFE0F2F1)
                         ) {
-                            Text(
-                                text = "✓ $fotoCapturadaLabel",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = tealPrimary,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isRunningOcr) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = tealPrimary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = if (isRunningOcr) fotoCapturadaLabel!! else "✓ $fotoCapturadaLabel",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = tealPrimary
+                                )
+                            }
                         }
                     }
 
-                    // Plantillas rápidas para probar el motor Ollama al instante
+                    // Plantillas opcionales para probar el motor Ollama al instante
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -342,12 +384,13 @@ fun ConfirmarRecetaScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
+                                    fotoCapturadaLabel = null
                                     textoOcrEditable = RECETA_EJEMPLO_1
                                     onAnalizarReceta(RECETA_EJEMPLO_1, null)
                                 }
                         ) {
                             Text(
-                                text = "Receta 1: Alergia Cruzada",
+                                text = "Plantilla 1: Alergia",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = tealPrimary,
@@ -361,12 +404,13 @@ fun ConfirmarRecetaScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
+                                    fotoCapturadaLabel = null
                                     textoOcrEditable = RECETA_EJEMPLO_2
                                     onAnalizarReceta(RECETA_EJEMPLO_2, null)
                                 }
                         ) {
                             Text(
-                                text = "Receta 2: Cardiometabólica",
+                                text = "Plantilla 2: Cardio",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = tealPrimary,
@@ -379,6 +423,7 @@ fun ConfirmarRecetaScreen(
                         value = textoOcrEditable,
                         onValueChange = { textoOcrEditable = it },
                         label = { Text("Texto de la receta médica (OCR / Editable)") },
+                        placeholder = { Text("Toma una foto, elige de galería o escribe/pega la receta aquí...") },
                         minLines = 3,
                         maxLines = 5,
                         modifier = Modifier.fillMaxWidth(),
@@ -393,7 +438,7 @@ fun ConfirmarRecetaScreen(
 
                     Button(
                         onClick = { onAnalizarReceta(textoOcrEditable, null) },
-                        enabled = !state.analizandoRecetaIa,
+                        enabled = !state.analizandoRecetaIa && !isRunningOcr && textoOcrEditable.isNotBlank(),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -687,3 +732,50 @@ fun ConfirmarRecetaScreen(
 }
 
 private fun EditablePrescriptionItem.dosageOrDosis(): String = this.dosis
+
+private fun scaleBitmapForOcr(bitmap: Bitmap, maxDim: Int = 1280): Bitmap {
+    val maxSide = max(bitmap.width, bitmap.height)
+    if (maxSide <= maxDim) return bitmap
+    val ratio = maxDim.toFloat() / maxSide.toFloat()
+    val w = (bitmap.width * ratio).toInt().coerceAtLeast(1)
+    val h = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+    return Bitmap.createScaledBitmap(bitmap, w, h, true)
+}
+
+private fun encodeBitmapJpegBase64(bitmap: Bitmap): String {
+    val bos = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 82, bos)
+    return Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
+}
+
+private fun decodeBitmapFromUri(context: Context, uri: Uri, maxDim: Int = 1280): Bitmap? {
+    return runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, bounds)
+        }
+        val maxSide = max(bounds.outWidth, bounds.outHeight)
+        var sampleSize = 1
+        while (maxSide / sampleSize > maxDim * 2) {
+            sampleSize *= 2
+        }
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, decodeOpts)
+        }
+    }.getOrNull()
+}
+
+private suspend fun runMlKitOcr(bitmap: Bitmap): String = suspendCancellableCoroutine { cont ->
+    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    val image = InputImage.fromBitmap(bitmap, 0)
+    recognizer.process(image)
+        .addOnSuccessListener { result ->
+            recognizer.close()
+            if (cont.isActive) cont.resume(result.text ?: "")
+        }
+        .addOnFailureListener {
+            recognizer.close()
+            if (cont.isActive) cont.resume("")
+        }
+}

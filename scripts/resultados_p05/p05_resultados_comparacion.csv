@@ -1,0 +1,4 @@
+Algoritmo,Exactitud_Val (%),Precisión (%),Sensibilidad_Recall (%),F1_Score (%)
+Decision Tree,73.33,75.0,83.33,78.95
+Random Forest,86.67,81.82,100.0,90.0
+KNN (k=5),93.33,94.44,94.44,94.44

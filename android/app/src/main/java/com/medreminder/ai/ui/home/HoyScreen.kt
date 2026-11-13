@@ -1,5 +1,6 @@
 package com.medreminder.ai.ui.home
 
+import android.app.DatePickerDialog
 import android.content.Intent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -85,6 +86,7 @@ import androidx.compose.material.icons.outlined.AccessAlarm
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.FormatSize
@@ -100,6 +102,7 @@ import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Sms
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Vaccines
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.WaterDrop
@@ -107,10 +110,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -141,6 +146,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -167,6 +173,8 @@ import com.medreminder.ai.ui.theme.TextPrimary
 import com.medreminder.ai.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.TextStyle
 import java.util.Locale
 
 data class PillColorPalette(
@@ -213,6 +221,7 @@ fun HomeRoute(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showProfileDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showMediDialog by remember { mutableStateOf(false) }
 
@@ -306,7 +315,10 @@ fun HomeRoute(
             onRefresh = { viewModel.cargarPanelCuidador(silencioso = false) },
             onAtenderAlerta = viewModel::onAtenderAlertaCuidador,
             onSimularAlertaCritica = viewModel::onSimularAlertaCriticaCuidador,
-            onCambiarRangoEdadDemo = viewModel::onCambiarRangoEdadDemo
+            onCambiarRangoEdadDemo = viewModel::onCambiarRangoEdadDemo,
+            onSeleccionarPaciente = viewModel::onSeleccionarPacienteCuidador,
+            onVincularConPaciente = viewModel::onVincularConPaciente,
+            onEvaluarMlPaciente = { viewModel.onCargarEvaluacionMl(silencioso = false) }
         )
         return
     }
@@ -368,7 +380,7 @@ fun HomeRoute(
                     dateHeader = state.fechaEncabezado.ifBlank { "Hoy" },
                     completadas = state.tomasCompletadasCount,
                     totalTomas = state.tomasHoy.size,
-                    onProfileClick = { showLogoutDialog = true },
+                    onProfileClick = { showProfileDialog = true },
                     onToggleTextoGrande = {
                         val current = accessSettings.fontScaleMode
                         val next = when (current) {
@@ -464,7 +476,9 @@ fun HomeRoute(
                         },
                         onSpeakText = speakText,
                         isTtsSpeaking = isTtsSpeaking,
-                        currentTtsKey = currentTtsKey
+                        currentTtsKey = currentTtsKey,
+                        onSelectFecha = viewModel::onSelectFecha,
+                        onSyncPendingNow = viewModel::onSyncPendingNow
                     )
 
                     HomeTab.MI_BOTIQUIN -> BotiquinScreenContent(
@@ -472,7 +486,9 @@ fun HomeRoute(
                         onAddMedicamentoClick = viewModel::onOpenNuevoMedicamento,
                         onEscanearRecetaClick = viewModel::onOpenEscaneoReceta,
                         onRecargarStock = viewModel::onRecargarStock,
-                        onEliminarMedicamento = viewModel::onEliminarMedicamento
+                        onEliminarMedicamento = viewModel::onEliminarMedicamento,
+                        onEditarMedicamento = viewModel::onEditarMedicamento,
+                        onActualizarTratamiento = viewModel::onActualizarTratamiento
                     )
 
                     HomeTab.SALUD_APOYO -> SaludApoyoScreenContent(
@@ -481,11 +497,19 @@ fun HomeRoute(
                         onEliminarAlergia = viewModel::onEliminarAlergia,
                         onGuardarContacto = viewModel::onGuardarContacto,
                         onEliminarContacto = viewModel::onEliminarContacto,
-                        onOpenVistaCuidador = viewModel::onOpenVistaCuidador
+                        onOpenVistaCuidador = viewModel::onOpenVistaCuidador,
+                        onGenerarCodigoVinculacion = viewModel::onGenerarCodigoVinculacion,
+                        onVincularConPaciente = viewModel::onVincularConPaciente,
+                        onRevocarVinculacion = viewModel::onRevocarVinculacion,
+                        onSeleccionarPacienteCuidador = viewModel::onSeleccionarPacienteCuidador
                     )
 
                     HomeTab.ANALISIS_DFS -> AnalisisDfsScreenContent(
-                        state = state
+                        state = state,
+                        onActivarEscudo = viewModel::onActivarEscudo,
+                        onCambiarAlgoritmoMl = viewModel::onCambiarAlgoritmoMl,
+                        onEvaluarMl = { viewModel.onCargarEvaluacionMl(silencioso = false) },
+                        onCargarTorneoMl = viewModel::onCargarTorneoModelos
                     )
                 }
             }
@@ -632,6 +656,48 @@ fun HomeRoute(
                 },
                 onDismiss = {
                     NotificationHelper.dismissActiveAlarmEvent()
+                }
+            )
+        }
+
+        // Diálogo de Perfil, Accesibilidad, Cambio de Contraseña y Sesión
+        if (showProfileDialog) {
+            PerfilAjustesDialog(
+                state = state,
+                onDismiss = { showProfileDialog = false },
+                onGuardarPerfil = { nombre, fecha, rol ->
+                    viewModel.onActualizarPerfil(nombre, fecha, rol) { ok ->
+                        if (ok) showProfileDialog = false
+                    }
+                },
+                onCambiarPassword = viewModel::onCambiarPassword,
+                onToggleTextoGrande = {
+                    val current = accessSettings.fontScaleMode
+                    val next = when (current) {
+                        FontScaleMode.NORMAL -> FontScaleMode.GRANDE
+                        FontScaleMode.GRANDE -> FontScaleMode.EXTRA_GRANDE
+                        FontScaleMode.EXTRA_GRANDE -> FontScaleMode.NORMAL
+                    }
+                    accessSettings.onFontScaleModeChange(next)
+                    viewModel.onToggleTextoGrande()
+                },
+                onToggleAltoContraste = {
+                    val current = accessSettings.themeMode
+                    val next = when (current) {
+                        ThemeMode.CALIDO_AMIGABLE -> ThemeMode.ALTO_CONTRASTE_DIA
+                        ThemeMode.ALTO_CONTRASTE_DIA -> ThemeMode.ALTO_CONTRASTE_NOCHE
+                        ThemeMode.ALTO_CONTRASTE_NOCHE -> ThemeMode.CALIDO_AMIGABLE
+                    }
+                    accessSettings.onThemeModeChange(next)
+                    viewModel.onToggleAltoContraste()
+                },
+                onAbrirVistaCuidador = {
+                    showProfileDialog = false
+                    viewModel.onOpenVistaCuidador()
+                },
+                onSolicitarCerrarSesion = {
+                    showProfileDialog = false
+                    showLogoutDialog = true
                 }
             )
         }
@@ -1098,12 +1164,19 @@ private fun HoyScreenContent(
     onToggleAltoContraste: () -> Unit = {},
     onSpeakText: (String) -> Unit = {},
     isTtsSpeaking: Boolean = false,
-    currentTtsKey: String? = null
+    currentTtsKey: String? = null,
+    onSelectFecha: (LocalDate) -> Unit = {},
+    onSyncPendingNow: () -> Unit = {}
 ) {
     val totalTomas = state.tomasHoy.size
     val completadas = state.tomasCompletadasCount
     val context = LocalContext.current
     val a11y = LocalAccessibilitySettings.current
+    val hoyLocalDate = remember { LocalDate.now() }
+    val diasCalendario = remember(hoyLocalDate) {
+        (-2L..4L).map { hoyLocalDate.plusDays(it) }
+    }
+    val esLocale = remember { Locale.forLanguageTag("es-ES") }
 
     val infiniteTransition = rememberInfiniteTransition(label = "plan_ambient_anim")
     val shimmerOffset by infiniteTransition.animateFloat(
@@ -1130,6 +1203,120 @@ private fun HoyScreenContent(
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // 0A. Indicador de Modo Offline / Cola Pendiente de Sincronización
+        if (state.isOfflineMode || state.pendingSyncCount > 0) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFFFF8E1),
+                    border = BorderStroke(1.dp, Color(0xFFFFB300)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (state.isOfflineMode) Icons.Outlined.CloudOff else Icons.Outlined.Sync,
+                                contentDescription = null,
+                                tint = Color(0xFFE65100),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = if (state.isOfflineMode) "Modo sin conexión (Caché activo)" else "Sincronización pendiente",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF9A3412)
+                                )
+                                if (state.pendingSyncCount > 0) {
+                                    Text(
+                                        text = "${state.pendingSyncCount} acción(es) en cola para enviar al servidor",
+                                        fontSize = 11.5.sp,
+                                        color = Color(0xFF9A3412)
+                                    )
+                                }
+                            }
+                        }
+                        TextButton(
+                            onClick = onSyncPendingNow,
+                            enabled = !state.isSyncingPending
+                        ) {
+                            Text(
+                                text = if (state.isSyncingPending) "..." else "Sincronizar",
+                                color = TealPrimary,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.5.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 0B. Tira de Calendario Semanal (-2d .. +4d)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                diasCalendario.forEach { fecha ->
+                    val iso = fecha.toString()
+                    val selected = state.fechaSeleccionadaIso == iso
+                    val isToday = fecha == hoyLocalDate
+                    val diaLabel = if (isToday) {
+                        "Hoy"
+                    } else {
+                        fecha.dayOfWeek.getDisplayName(TextStyle.SHORT, esLocale)
+                            .replace(".", "")
+                            .replaceFirstChar { it.uppercase(esLocale) }
+                            .take(3)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selected) TealPrimary else a11y.adaptiveCardSurface,
+                        border = BorderStroke(
+                            1.dp,
+                            if (selected) TealPrimary else a11y.adaptiveBorder
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onSelectFecha(fecha) }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = diaLabel,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected || isToday) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                color = if (selected) Color.White else a11y.adaptiveTextSecondary,
+                                maxLines = 1
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = fecha.dayOfMonth.toString(),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (selected) Color.White else a11y.adaptiveTextPrimary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. Tarjeta de Progreso Diario + Modo Adaptativo por Edad (Racha/Honor vs Supervisión Adulto Mayor)
         item {
             Surface(
@@ -1157,7 +1344,11 @@ private fun HoyScreenContent(
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    text = if (totalTomas == 0) "Sin dosis pendientes hoy" else "$completadas de $totalTomas tomas completadas",
+                                    text = if (totalTomas == 0) {
+                                        if (state.isSelectedDateToday) "Sin dosis pendientes hoy" else "Sin dosis para este día"
+                                    } else {
+                                        "$completadas de $totalTomas tomas completadas"
+                                    },
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = a11y.adaptiveTextPrimary
@@ -1404,6 +1595,14 @@ private fun HoyScreenContent(
                     }
                 }
             }
+        }
+
+        // 2. Semáforo Clínico de Adherencia y Riesgo IA (Visible en Pantalla Principal)
+        item {
+            SemaforoAdherenciaCard(
+                state = state,
+                onClick = onOpenVistaCuidador
+            )
         }
 
         // 3. Banner de Modo Castigo / Delación al Cuidador (cuando hay omisiones o bajo Honor)
@@ -1841,6 +2040,129 @@ private fun DopaminaRachaHonorCard(
                         .background(if (castigoActivo) AlertRedText else TealPrimary)
                 )
             }
+        }
+    }
+}
+
+private data class SemaforoConfig(
+    val estado: String,
+    val color: Color,
+    val fondo: Color,
+    val label: String,
+    val descripcion: String
+)
+
+@Composable
+private fun SemaforoAdherenciaCard(
+    state: HomeUiState,
+    onClick: () -> Unit
+) {
+    val a11y = LocalAccessibilitySettings.current
+    val tieneCritica = state.tomasCriticasOmitidasHoy > 0 ||
+        state.cuidadorPanel?.estadoRiesgo == "alerta_critica" ||
+        state.cuidadorPanel?.alertasActivas?.any { it.esCritico } == true
+    val tieneOmisiones = state.vecesOmitidasHoy > 0 ||
+        state.castigoActivo ||
+        state.cuidadorPanel?.estadoRiesgo == "atencion_requerida" ||
+        state.cuidadorPanel?.alertasActivas?.isNotEmpty() == true
+
+    val config = when {
+        tieneCritica -> SemaforoConfig(
+            estado = "rojo",
+            color = Color(0xFFEF4444),
+            fondo = Color(0xFFFEF2F2),
+            label = "SEMÁFORO ROJO • ALERTA CRÍTICA",
+            descripcion = "Omisión en medicamento crítico. Se activó protocolo de notificación al cuidador."
+        )
+        tieneOmisiones -> SemaforoConfig(
+            estado = "amarillo",
+            color = Color(0xFFF59E0B),
+            fondo = Color(0xFFFFFBEB),
+            label = "SEMÁFORO AMARILLO • ATENCIÓN REQUERIDA",
+            descripcion = "Dosis demoradas u omitidas. Revisa tus horarios para recuperar adherencia."
+        )
+        else -> SemaforoConfig(
+            estado = "verde",
+            color = Color(0xFF10B981),
+            fondo = Color(0xFFECFDF5),
+            label = "SEMÁFORO VERDE • ADHERENCIA ÓPTIMA",
+            descripcion = "Tratamiento al día. El modelo de Machine Learning clasifica tu perfil en bajo riesgo."
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (a11y.isDarkTheme) Color(0xFF1A262C) else config.fondo,
+        border = BorderStroke(1.2.dp, config.color.copy(alpha = 0.5f)),
+        shadowElevation = 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Foco físico del semáforo con los 3 colores
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (a11y.isDarkTheme) Color(0xFF111827) else Color(0xFF1F2937),
+                modifier = Modifier.padding(end = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Foco Rojo
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (config.estado == "rojo") Color(0xFFEF4444) else Color(0xFF4B5563))
+                    )
+                    // Foco Amarillo
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (config.estado == "amarillo") Color(0xFFFBBF24) else Color(0xFF4B5563))
+                    )
+                    // Foco Verde
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (config.estado == "verde") Color(0xFF10B981) else Color(0xFF4B5563))
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = config.label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = config.color
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = config.descripcion,
+                    fontSize = 12.sp,
+                    color = a11y.adaptiveTextSecondary,
+                    lineHeight = 16.sp
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            Icon(
+                imageVector = Icons.Outlined.HealthAndSafety,
+                contentDescription = "Ver panel de cuidador",
+                tint = config.color,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -3256,6 +3578,255 @@ fun ConfirmacionTomaModal(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PerfilAjustesDialog(
+    state: HomeUiState,
+    onDismiss: () -> Unit,
+    onGuardarPerfil: (nombre: String, fechaNacimiento: String, rol: String) -> Unit,
+    onCambiarPassword: (actual: String, nueva: String, onResult: (Boolean, String) -> Unit) -> Unit,
+    onToggleTextoGrande: () -> Unit,
+    onToggleAltoContraste: () -> Unit,
+    onAbrirVistaCuidador: () -> Unit,
+    onSolicitarCerrarSesion: () -> Unit
+) {
+    val context = LocalContext.current
+    val a11y = LocalAccessibilitySettings.current
+    var nombre by remember(state.nombreUsuario) { mutableStateOf(state.nombreUsuario) }
+    var fechaNac by remember(state.fechaNacimiento) { mutableStateOf(state.fechaNacimiento) }
+    var rol by remember(state.rolUsuario) { mutableStateOf(state.rolUsuario.ifBlank { "paciente" }) }
+
+    var showChangePass by remember { mutableStateOf(false) }
+    var passActual by remember { mutableStateOf("") }
+    var passNueva by remember { mutableStateOf("") }
+    var passFeedback by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = CardBackground,
+            shadowElevation = 10.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(14.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Mi Perfil y Ajustes",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary
+                        )
+                        if (state.correoUsuario.isNotBlank()) {
+                            Text(
+                                text = state.correoUsuario,
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                }
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre completo") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Fecha de nacimiento:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(
+                            text = "$fechaNac (${state.edadUsuario} años)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TealDark
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val parts = fechaNac.split("-")
+                            val y = parts.getOrNull(0)?.toIntOrNull() ?: 1965
+                            val m = (parts.getOrNull(1)?.toIntOrNull() ?: 1) - 1
+                            val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
+                            DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    fechaNac = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                                },
+                                y,
+                                m.coerceIn(0, 11),
+                                d.coerceIn(1, 31)
+                            ).show()
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cambiar fecha", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Rol en MedReminder AI:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = rol == "paciente",
+                            onClick = { rol = "paciente" },
+                            label = { Text("Paciente", fontWeight = FontWeight.Bold) }
+                        )
+                        FilterChip(
+                            selected = rol == "cuidador",
+                            onClick = { rol = "cuidador" },
+                            label = { Text("Cuidador / Familiar", fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (nombre.isNotBlank()) {
+                            onGuardarPerfil(nombre.trim(), fechaNac, rol)
+                        }
+                    },
+                    enabled = !state.isSavingProfile && nombre.isNotBlank(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text(
+                        text = if (state.isSavingProfile) "Guardando..." else "Guardar Cambios de Perfil",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                HorizontalDivider(color = InputBorderColor)
+
+                Text("Accesibilidad Visual y Supervisión", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onToggleTextoGrande,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Texto: ${a11y.fontScaleMode.name}",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onToggleAltoContraste,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Tema visual",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onAbrirVistaCuidador,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Abrir Panel de Cuidador / Familiar", color = TealDark, fontWeight = FontWeight.Bold)
+                }
+
+                TextButton(
+                    onClick = { showChangePass = !showChangePass },
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text(
+                        text = if (showChangePass) "Ocultar cambio de contraseña" else "Cambiar contraseña",
+                        color = TealPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (showChangePass) {
+                    OutlinedTextField(
+                        value = passActual,
+                        onValueChange = { passActual = it },
+                        label = { Text("Contraseña actual") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = passNueva,
+                        onValueChange = { passNueva = it },
+                        label = { Text("Nueva contraseña (mín. 8 caracteres)") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (passFeedback != null) {
+                        Text(passFeedback!!, fontSize = 12.sp, color = TealDark, fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = {
+                            onCambiarPassword(passActual, passNueva) { ok, msg ->
+                                passFeedback = msg
+                                if (ok) {
+                                    passActual = ""
+                                    passNueva = ""
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TealDark),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Actualizar Contraseña", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                HorizontalDivider(color = InputBorderColor)
+
+                OutlinedButton(
+                    onClick = onSolicitarCerrarSesion,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, AlertRedText),
+                    modifier = Modifier.fillMaxWidth().height(46.dp)
+                ) {
+                    Text("Cerrar sesión", color = AlertRedText, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }

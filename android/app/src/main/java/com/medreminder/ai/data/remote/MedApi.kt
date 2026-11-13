@@ -15,17 +15,49 @@ interface MedApi {
     @GET("auth/me")
     suspend fun obtenerPerfil(): UsuarioDto
 
+    @PATCH("auth/me")
+    suspend fun actualizarPerfil(@Body body: UpdatePerfilRequestDto): UsuarioDto
+
+    @POST("auth/change-password")
+    suspend fun cambiarPassword(@Body body: ChangePasswordRequestDto): SimpleMensajeResponseDto
+
     @PATCH("auth/me/edad")
     suspend fun actualizarPerfilEdad(@Body body: UpdatePerfilEdadRequestDto): UsuarioDto
 
-    // --- Vista del Cuidador y Alertas Geriátricas ---
+    // --- Vista del Cuidador, Vinculación y Alertas Geriátricas ---
     @GET("cuidador/panel")
     suspend fun obtenerPanelCuidador(
+        @Query("id_paciente") idPaciente: Int? = null,
         @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
     ): CuidadorPanelResponseDto
 
+    @POST("cuidador/codigo-vinculacion")
+    suspend fun generarCodigoVinculacion(): CodigoVinculacionOutDto
+
+    @POST("cuidador/vincular")
+    suspend fun vincularConPaciente(
+        @Body body: VincularPacienteRequestDto,
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): PacienteVinculadoItemDto
+
+    @GET("cuidador/pacientes")
+    suspend fun listarPacientesVinculados(
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): List<PacienteVinculadoItemDto>
+
+    @GET("cuidador/vinculaciones")
+    suspend fun obtenerResumenVinculaciones(
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): VinculacionesResumenOutDto
+
+    @DELETE("cuidador/vinculaciones/{id}")
+    suspend fun revocarVinculacion(@Path("id") idVinculacion: Int): Response<Unit>
+
     @POST("cuidador/alertas")
-    suspend fun dispararAlertaCuidador(@Body body: AlertaCuidadorCreateDto): AlertaCuidadorDto
+    suspend fun dispararAlertaCuidador(
+        @Body body: AlertaCuidadorCreateDto,
+        @Query("id_paciente") idPaciente: Int? = null
+    ): AlertaCuidadorDto
 
     @PATCH("cuidador/alertas/{id}/atender")
     suspend fun marcarAlertaCuidadorAtendida(@Path("id") idAlerta: Int): AlertaCuidadorDto
@@ -62,6 +94,22 @@ interface MedApi {
 
     @GET("tratamientos")
     suspend fun listarTratamientos(): List<TratamientoDto>
+
+    @PATCH("tratamientos/{id}")
+    suspend fun actualizarTratamiento(
+        @Path("id") idTratamiento: Int,
+        @Body body: TratamientoUpdateDto
+    ): TratamientoDto
+
+    @GET("recordatorios/estadisticas")
+    suspend fun obtenerEstadisticas(
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): EstadisticasOutDto
+
+    @POST("recordatorios/escudo")
+    suspend fun activarEscudo(
+        @Query("tz_offset_minutes") tzOffsetMinutes: Int? = null
+    ): EscudoActivarResponseDto
 
     @GET("recordatorios/dashboard")
     suspend fun obtenerDashboardUnificado(
@@ -122,5 +170,21 @@ interface MedApi {
 
     @POST("ai/analizar-receta")
     suspend fun analizarRecetaAi(@Body body: AiPrescriptionScanRequestDto): AiPrescriptionScanResponseDto
+
+    // --- Predictor Clínico ML de Abandono (Práctica 05) ---
+    @GET("ai/evaluar-paciente/{id}")
+    suspend fun evaluarPacienteMl(
+        @Path("id") pacienteId: Int,
+        @Query("algoritmo") algoritmo: String = "random_forest"
+    ): AiEvaluarPacienteResponseDto
+
+    @POST("ai/predecir-riesgo-adherencia")
+    suspend fun predecirAdherenciaMl(
+        @Body body: AiAdherencePredictRequestDto,
+        @Query("algoritmo") algoritmo: String = "random_forest"
+    ): AiEvaluarPacienteResponseDto
+
+    @GET("ai/torneo-modelos")
+    suspend fun obtenerTorneoModelosMl(): TorneoModelosResponseDto
 }
 
