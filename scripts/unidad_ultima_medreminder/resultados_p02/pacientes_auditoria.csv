@@ -1,0 +1,4 @@
+id_paciente,edad,adherencia_historica_pct,retraso_promedio_min,motivo_revision
+PAC-03,165,135.0,15.0,edad_invalida_o_faltante; adherencia_fuera_de_rango
+PAC-04,,74.0,-25.0,edad_invalida_o_faltante; retraso_negativo_o_faltante
+PAC-05,setenta,81.0,,edad_invalida_o_faltante; retraso_negativo_o_faltante

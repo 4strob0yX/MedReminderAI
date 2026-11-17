@@ -509,7 +509,9 @@ fun HomeRoute(
                         onActivarEscudo = viewModel::onActivarEscudo,
                         onCambiarAlgoritmoMl = viewModel::onCambiarAlgoritmoMl,
                         onEvaluarMl = { viewModel.onCargarEvaluacionMl(silencioso = false) },
-                        onCargarTorneoMl = viewModel::onCargarTorneoModelos
+                        onCargarTorneoMl = viewModel::onCargarTorneoModelos,
+                        onCargarPerfilIntegral = { viewModel.onCargarPerfilIntegral() },
+                        onCargarAnaliticaAvanzada = { viewModel.onCargarAnaliticaAvanzada(silencioso = false) }
                     )
                 }
             }
@@ -592,7 +594,11 @@ fun HomeRoute(
                 HomeTab.SALUD_APOYO -> "Apoyo"
                 HomeTab.ANALISIS_DFS -> "Progreso"
             },
-            onAskAi = viewModel::consultarMediAi
+            onAskAi = viewModel::consultarMediAi,
+            onConfirmMedications = viewModel::confirmarMedicamentosMediAi,
+            onUndoInsertedMedications = viewModel::deshacerMedicamentosMediAi,
+            onOpenBotiquin = { viewModel.onSelectTab(HomeTab.MI_BOTIQUIN) },
+            onOpenNuevoMedicamento = viewModel::onOpenNuevoMedicamento
         )
 
         // Modal de Confirmación de Toma con Verificación Visual y Anti-Toque Falso

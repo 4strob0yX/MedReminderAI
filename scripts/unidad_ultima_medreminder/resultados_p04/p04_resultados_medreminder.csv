@@ -1,0 +1,7 @@
+max_depth,acc_train,acc_val,brecha,diagnostico
+1,0.7444,0.6,0.1444,Subajuste
+2,0.8111,0.7333,0.0778,Buen ajuste
+3,0.8778,0.7667,0.1111,Sobreajuste
+5,0.9889,0.8,0.1889,Sobreajuste
+10,1.0,0.7333,0.2667,Sobreajuste
+Sin límite,1.0,0.7333,0.2667,Sobreajuste

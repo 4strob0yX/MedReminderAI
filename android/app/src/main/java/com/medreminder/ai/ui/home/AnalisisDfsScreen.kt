@@ -450,7 +450,9 @@ fun AnalisisDfsScreenContent(
     onActivarEscudo: () -> Unit = {},
     onCambiarAlgoritmoMl: (String) -> Unit = {},
     onEvaluarMl: () -> Unit = {},
-    onCargarTorneoMl: () -> Unit = {}
+    onCargarTorneoMl: () -> Unit = {},
+    onCargarPerfilIntegral: () -> Unit = {},
+    onCargarAnaliticaAvanzada: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hoyIso = remember { LocalDate.now().toString() }
@@ -525,6 +527,15 @@ fun AnalisisDfsScreenContent(
                     onCambiarAlgoritmo = onCambiarAlgoritmoMl,
                     onRefrescarEvaluacion = onEvaluarMl,
                     onCargarTorneo = onCargarTorneoMl
+                )
+            }
+
+            // Analítica Avanzada IA (Prácticas 06–15: GridSearch, K-Means, PCA 2D, Motor y MongoDB)
+            item {
+                AnaliticaAvanzadaIaCard(
+                    state = state,
+                    onCargarPerfilIntegral = onCargarPerfilIntegral,
+                    onCargarAnaliticaAvanzada = onCargarAnaliticaAvanzada
                 )
             }
 
@@ -3156,6 +3167,324 @@ private fun PrediccionMlCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AnaliticaAvanzadaIaCard(
+    state: HomeUiState,
+    onCargarPerfilIntegral: () -> Unit,
+    onCargarAnaliticaAvanzada: () -> Unit
+) {
+    var seccionActiva by rememberSaveable { mutableIntStateOf(-1) }
+    val perfil = state.perfilIntegral
+    val opt = state.optimizacionP06
+    val seg = state.segmentacionPca
+    val hist = state.historialReportesMongo
+
+    val secciones = listOf(
+        0 to "Optimiz. P06",
+        1 to "K-Means P07–08",
+        2 to "PCA 2D P09–13",
+        3 to "MongoDB P15"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = CardBackground,
+        border = BorderStroke(1.dp, InputBorderColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Outlined.BarChart,
+                        contentDescription = null,
+                        tint = TealPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "ANALÍTICA CLÍNICA IA (P06–P15)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp,
+                        color = TealPrimary
+                    )
+                }
+                OutlinedButton(
+                    onClick = onCargarPerfilIntegral,
+                    enabled = !state.cargandoAnaliticaAvanzada,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    if (state.cargandoAnaliticaAvanzada) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("Perfil Integral", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (perfil == null) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = SoftWarmSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Toca \"Perfil Integral\" para calcular el segmento K-Means, proyección PCA 2D, recomendaciones (P14) y guardar el reporte en MongoDB (P15).",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (perfil.esAtipico) AlertRedBg else TealBadgeBg,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Segmento K-Means: ${perfil.perfilKmeans}",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (perfil.esAtipico) AlertRedText else TealDark
+                        )
+                        Text(
+                            text = "PCA (${perfil.pc1}, ${perfil.pc2}) • Dist. centroide ${perfil.distanciaCentroide} (P95=${perfil.umbralAtipicoP95})" +
+                                if (perfil.esAtipico) " • ATÍPICO" else " • Normal",
+                            fontSize = 12.sp,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = if (perfil.persistenciaMongo.guardado) {
+                                "MongoDB P15 (${perfil.persistenciaMongo.modo}): guardado en ${perfil.persistenciaMongo.coleccion}"
+                            } else {
+                                "MongoDB P15 (${perfil.persistenciaMongo.modo}): reporte generado localmente"
+                            },
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                if (perfil.recomendacionesMotor.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Motor de Recomendaciones (P14):",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        perfil.recomendacionesMotor.forEach { rec ->
+                            Text("• $rec", fontSize = 12.sp, color = TextSecondary)
+                        }
+                    }
+                }
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                secciones.forEach { (idx, titulo) ->
+                    FilterChip(
+                        selected = seccionActiva == idx,
+                        onClick = {
+                            val next = if (seccionActiva == idx) -1 else idx
+                            seccionActiva = next
+                            if (next != -1 && (opt == null || seg == null || hist == null)) {
+                                onCargarAnaliticaAvanzada()
+                            }
+                        },
+                        label = { Text(titulo, fontSize = 11.5.sp, fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+
+            if (seccionActiva == 0) {
+                Surface(shape = RoundedCornerShape(14.dp), color = SoftWarmSurface, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (opt == null) {
+                            Text("Cargando optimización GridSearch/Randomized (P06)...", fontSize = 12.sp, color = TextSecondary)
+                        } else {
+                            Text(
+                                text = "Ganador P06: ${opt.algoritmoGanadorNombre} (CV F1 ${opt.f1CvGanadorPct}%)",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealDark
+                            )
+                            Text(
+                                text = "Test -> Acc ${opt.metricasPrueba["accuracy_pct"] ?: 0f}% • F1 ${opt.metricasPrueba["f1_score_pct"] ?: 0f}% • Recall ${opt.metricasPrueba["recall_pct"] ?: 0f}%",
+                                fontSize = 11.5.sp,
+                                color = TextPrimary
+                            )
+                            opt.comparativaMetodos.forEach { item ->
+                                Text(
+                                    text = "${item.algoritmo}: Grid ${item.gridF1CvPct}% (${item.gridTiempoSeg}s) vs Random ${item.randomF1CvPct}% (${item.randomTiempoSeg}s)",
+                                    fontSize = 11.5.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (seccionActiva == 1) {
+                Surface(shape = RoundedCornerShape(14.dp), color = SoftWarmSurface, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (seg == null) {
+                            Text("Cargando clústeres K-Means (P07–P08)...", fontSize = 12.sp, color = TextSecondary)
+                        } else {
+                            Text(
+                                text = "Estabilidad ARI: ${seg.estabilidadAri.ariPromedio} • Atípicos P95: ${seg.totalAtipicosDetectados}/${seg.totalPacientesCohorte}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealDark
+                            )
+                            seg.perfilesKmeans.forEach { p ->
+                                Text(
+                                    text = "• ${p.perfil} (${p.totalPacientes}): Adh ${p.adherenciaPromedioPct}%, Retraso ${p.retrasoPromedioMin}m, Edad ${p.edadPromedio}",
+                                    fontSize = 11.5.sp,
+                                    color = TextPrimary
+                                )
+                            }
+                            seg.comparativaEscaladores.forEach { esc ->
+                                Text(
+                                    text = "Escalador ${esc.escalador}: Silhouette ${esc.silhouette} (Inercia ${esc.inercia})",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (seccionActiva == 2) {
+                Surface(shape = RoundedCornerShape(14.dp), color = SoftWarmSurface, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (seg == null) {
+                            Text("Cargando proyección PCA 2D (P09–P13)...", fontSize = 12.sp, color = TextSecondary)
+                        } else {
+                            val pc1Var = seg.pcaVarianzaExplicadaPct["PC1"] ?: 0f
+                            val pc2Var = seg.pcaVarianzaExplicadaPct["PC2"] ?: 0f
+                            val acumVar = seg.pcaVarianzaExplicadaPct["acumulada"] ?: 0f
+                            Text(
+                                text = "Varianza PCA: PC1=$pc1Var%, PC2=$pc2Var% (Acumulada $acumVar%)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealDark
+                            )
+                            PcaScatterCanvas(
+                                puntos = seg.puntosProyectados,
+                                pacienteActual = perfil?.let { it.pc1 to it.pc2 }
+                            )
+                            Text(
+                                text = "Error reconstrucción MSE: ${seg.pcaErrorReconstruccionMse} • Azul/Teal=Óptima, Naranja=Moderada, Rojo=Acompañamiento",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+            } else if (seccionActiva == 3) {
+                Surface(shape = RoundedCornerShape(14.dp), color = SoftWarmSurface, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (hist == null) {
+                            Text("Cargando historial de reportes MongoDB (P15)...", fontSize = 12.sp, color = TextSecondary)
+                        } else {
+                            Text(
+                                text = if (hist.disponible) {
+                                    "MongoDB (${hist.modo}) • ${hist.coleccion}: ${hist.total} reporte(s)"
+                                } else {
+                                    "MongoDB (${hist.modo}): sin conexión activa (${hist.detalle ?: "offline"})"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealDark
+                            )
+                            hist.registros.take(5).forEach { reg ->
+                                val perfilReg = reg.datos["perfil_kmeans"]?.toString() ?: "Análisis IA"
+                                Text(
+                                    text = "• ${reg.fechaRegistroUtc.take(19)} -> $perfilReg (${reg.idAnalisis.take(8)})",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PcaScatterCanvas(
+    puntos: List<com.medreminder.ai.data.remote.PuntoPcaDto>,
+    pacienteActual: Pair<Float, Float>?
+) {
+    if (puntos.isEmpty()) return
+    val minX = minOf(puntos.minOf { it.pc1 }, pacienteActual?.first ?: 0f) - 0.3f
+    val maxX = maxOf(puntos.maxOf { it.pc1 }, pacienteActual?.first ?: 0f) + 0.3f
+    val minY = minOf(puntos.minOf { it.pc2 }, pacienteActual?.second ?: 0f) - 0.3f
+    val maxY = maxOf(puntos.maxOf { it.pc2 }, pacienteActual?.second ?: 0f) + 0.3f
+    val spanX = (maxX - minX).coerceAtLeast(0.5f)
+    val spanY = (maxY - minY).coerceAtLeast(0.5f)
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(170.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(CardBackground)
+            .padding(8.dp)
+    ) {
+        val w = size.width
+        val h = size.height
+        val zeroX = ((0f - minX) / spanX) * w
+        val zeroY = h - ((0f - minY) / spanY) * h
+        drawLine(Color.LightGray, Offset(zeroX, 0f), Offset(zeroX, h), strokeWidth = 1f)
+        drawLine(Color.LightGray, Offset(0f, zeroY), Offset(w, zeroY), strokeWidth = 1f)
+
+        puntos.forEach { p ->
+            val cx = ((p.pc1 - minX) / spanX) * w
+            val cy = h - ((p.pc2 - minY) / spanY) * h
+            val color = when {
+                p.perfil.contains("óptima", ignoreCase = true) -> Color(0xFF0D9488)
+                p.perfil.contains("moderado", ignoreCase = true) -> Color(0xFFE65100)
+                else -> Color(0xFFC62828)
+            }
+            drawCircle(
+                color = color.copy(alpha = 0.72f),
+                radius = if (p.atipico) 6.5f else 4.2f,
+                center = Offset(cx, cy)
+            )
+            if (p.atipico) {
+                drawCircle(
+                    color = Color.Black,
+                    radius = 7f,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 1.5f)
+                )
+            }
+        }
+
+        if (pacienteActual != null) {
+            val px = ((pacienteActual.first - minX) / spanX) * w
+            val py = h - ((pacienteActual.second - minY) / spanY) * h
+            drawCircle(color = Color(0xFF1E3A8A), radius = 10f, center = Offset(px, py))
+            drawCircle(color = Color.White, radius = 4.5f, center = Offset(px, py))
         }
     }
 }

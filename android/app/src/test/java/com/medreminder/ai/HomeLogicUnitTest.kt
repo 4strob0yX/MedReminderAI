@@ -1,5 +1,7 @@
 package com.medreminder.ai
 
+import com.medreminder.ai.data.remote.AiChatMedicationActionItemDto
+import com.medreminder.ai.data.remote.AiChatResponseDto
 import com.medreminder.ai.data.remote.EstadisticasOutDto
 import com.medreminder.ai.data.remote.parseApiErrorDetail
 import com.medreminder.ai.ui.home.FormaFarmaceutica
@@ -57,5 +59,41 @@ class HomeLogicUnitTest {
         assertEquals(0, dto.xpHonor)
         assertFalse(dto.escudoActivoHoy)
         assertTrue(dto.adherenciaSemanal.isEmpty())
+    }
+
+    @Test
+    fun esIntencionInsertarMedicamentoLocal_distinguishesInsertVsClinicalQuestion() {
+        assertTrue(HomeViewModel.esIntencionInsertarMedicamentoLocal("Agrega Paracetamol 500 mg cada 8 horas"))
+        assertTrue(HomeViewModel.esIntencionInsertarMedicamentoLocal("¿Puedes insertar Losartán 50 mg?"))
+        assertTrue(HomeViewModel.esIntencionInsertarMedicamentoLocal("Recuérdame tomar Omeprazol 20 mg"))
+
+        assertFalse(HomeViewModel.esIntencionInsertarMedicamentoLocal("¿Puedo tomar paracetamol para el dolor?"))
+        assertFalse(HomeViewModel.esIntencionInsertarMedicamentoLocal("¿Cómo debo guardar mi insulina?"))
+        assertFalse(HomeViewModel.esIntencionInsertarMedicamentoLocal("¿Qué pasa si agrego ibuprofeno?"))
+    }
+
+    @Test
+    fun aiChatResponseDto_defaultsPreserveMedicationActionCompatibility() {
+        val dto = AiChatResponseDto(
+            title = "Medicamento Insertado",
+            category = "Botiquín",
+            riskLevel = "Informativo",
+            keyInsight = "Agregado",
+            goldenRule = "Seguro",
+            fullVoiceScript = "Listo",
+            actionPerformed = "inserted_medications",
+            medicationsAffected = listOf(
+                AiChatMedicationActionItemDto(
+                    idMedicamento = 42,
+                    nombre = "Paracetamol 500 mg",
+                    dosis = "500 mg",
+                    frecuenciaHoras = 8,
+                    creadoEnBd = true
+                )
+            )
+        )
+        assertEquals("inserted_medications", dto.actionPerformed)
+        assertEquals(1, dto.medicationsAffected.size)
+        assertTrue(dto.medicationsAffected[0].creadoEnBd)
     }
 }

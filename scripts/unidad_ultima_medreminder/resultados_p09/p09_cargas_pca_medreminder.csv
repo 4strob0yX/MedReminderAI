@@ -1,0 +1,6 @@
+componente,edad,medicamentos_activos,adherencia_historica_pct,retraso_promedio_min,tiene_cuidador
+PC1,-0.4741,-0.4859,0.5079,-0.5045,0.1631
+PC2,0.1307,0.0916,-0.0532,0.0536,0.9843
+PC3,0.8074,-0.5616,0.0698,-0.1613,-0.0424
+PC4,0.3156,0.6631,0.4131,-0.5361,-0.0522
+PC5,0.0813,0.0226,0.7508,0.6551,-0.008

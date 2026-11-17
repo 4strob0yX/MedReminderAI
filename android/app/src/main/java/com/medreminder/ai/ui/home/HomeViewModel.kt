@@ -4,17 +4,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.medreminder.ai.data.remote.AiAdherencePredictRequestDto
+import com.medreminder.ai.data.remote.AiChatMedicationActionItemDto
 import com.medreminder.ai.data.remote.AiChatResponseDto
 import com.medreminder.ai.data.remote.AiEvaluarPacienteResponseDto
 import com.medreminder.ai.data.remote.AlergiaDto
 import com.medreminder.ai.data.remote.ContactoApoyoDto
 import com.medreminder.ai.data.remote.CuidadorPanelResponseDto
 import com.medreminder.ai.data.remote.EstadisticasOutDto
+import com.medreminder.ai.data.remote.HistorialReportesMongoResponseDto
 import com.medreminder.ai.data.remote.MedicamentoCatalogoItemDto
 import com.medreminder.ai.data.remote.MedicamentoCreateDto
 import com.medreminder.ai.data.remote.MedicamentoDto
+import com.medreminder.ai.data.remote.OptimizacionP06ResponseDto
 import com.medreminder.ai.data.remote.PacienteVinculadoItemDto
+import com.medreminder.ai.data.remote.PerfilIntegralResponseDto
 import com.medreminder.ai.data.remote.RecordatorioDto
+import com.medreminder.ai.data.remote.SegmentacionPcaResponseDto
 import com.medreminder.ai.data.remote.TorneoModelosResponseDto
 import com.medreminder.ai.data.remote.TratamientoDto
 import com.medreminder.ai.data.remote.VinculacionesResumenOutDto
@@ -221,6 +226,11 @@ data class HomeUiState(
     val cargandoMl: Boolean = false,
     val algoritmoMlSeleccionado: String = "random_forest",
     val torneoModelos: TorneoModelosResponseDto? = null,
+    val optimizacionP06: OptimizacionP06ResponseDto? = null,
+    val segmentacionPca: SegmentacionPcaResponseDto? = null,
+    val perfilIntegral: PerfilIntegralResponseDto? = null,
+    val historialReportesMongo: HistorialReportesMongoResponseDto? = null,
+    val cargandoAnaliticaAvanzada: Boolean = false,
     val pacientesVinculados: List<PacienteVinculadoItemDto> = emptyList(),
     val selectedPacienteId: Int? = null,
     val vinculacionesResumen: VinculacionesResumenOutDto? = null,
@@ -1030,16 +1040,108 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         }
     }
 
+    private fun registrarMetadatosChatInsertados(dto: AiChatResponseDto) {
+        if (dto.actionPerformed != "inserted_medications" || dto.medicationsAffected.isEmpty()) return
+        for (med in dto.medicationsAffected) {
+            val medId = med.idMedicamento ?: continue
+            capacidadPorMedicamento[medId] = maxOf(med.cantidadStock, 1)
+            metadatosLocalesMed[medId] = LocalMedMeta(
+                forma = FormaFarmaceutica.fromString(med.formaFarmaceutica),
+                colorPastilla = med.colorPastilla,
+                instruccionesToma = med.instruccionesToma,
+                stockInicial = med.cantidadStock
+            )
+        }
+        val nombres = dto.medicationsAffected.joinToString(", ") { it.nombre }
+        _state.update {
+            it.copy(
+                mediReaction = nextReaction(it, MediReactionKind.TAKEN),
+                snackbarMessage = "✓ Medi registró: $nombres"
+            )
+        }
+        cargarDatos(silencioso = true)
+    }
+
     /**
      * Consulta en vivo al motor Ollama (`medi-clinico`) desde la mascota Medi.
+     * Si el comando inserta medicamentos en la base de datos, recarga dashboard y alarmas al instante.
      */
     suspend fun consultarMediAi(query: String, contextoPantalla: String = "Hoy"): AiChatResponseDto? {
         val nombreActual = _state.value.nombreUsuario.ifBlank { "Paciente" }
-        return repository.consultarMediAi(
+        val tzOffset = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60
+        val res = repository.consultarMediAi(
             query = query,
             nombreUsuario = nombreActual,
-            contextoPantalla = contextoPantalla
-        ).getOrNull()
+            contextoPantalla = contextoPantalla,
+            tzOffsetMinutes = tzOffset
+        )
+        res.onSuccess { dto ->
+            registrarMetadatosChatInsertados(dto)
+            return dto
+        }
+        if (esIntencionInsertarMedicamentoLocal(query)) {
+            val errMsg = res.exceptionOrNull()?.message ?: "Sin conexión con el servidor"
+            return AiChatResponseDto(
+                title = "Sin conexión para guardar medicamento",
+                category = "Asistente Medi · Conexión",
+                riskLevel = "Informativo",
+                riskScore = 0.25f,
+                keyInsight = "No pude conectarme al servidor para registrar el medicamento ($errMsg).",
+                points = listOf(
+                    com.medreminder.ai.data.remote.AiDossierPointDto(
+                        label = "Opción rápida",
+                        description = "Verifica tu conexión e inténtalo de nuevo, o abre el formulario de Nuevo Medicamento.",
+                        iconType = "info"
+                    )
+                ),
+                goldenRule = "Los nuevos medicamentos requieren validar alergias y guardarse en tu cuenta.",
+                fullVoiceScript = "No pude conectarme al servidor para guardar el medicamento. Verifica tu conexión o abre el formulario de Nuevo Medicamento.",
+                modelUsed = "medi-clinico",
+                usingOllama = false,
+                actionPerformed = "offline_error",
+                medicationsAffected = emptyList()
+            )
+        }
+        return null
+    }
+
+    suspend fun confirmarMedicamentosMediAi(
+        items: List<AiChatMedicationActionItemDto>
+    ): AiChatResponseDto? {
+        if (items.isEmpty()) return null
+        val tzOffset = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60
+        val res = repository.confirmarMedicamentosAi(
+            medicamentos = items,
+            tzOffsetMinutes = tzOffset
+        )
+        return res.onSuccess { dto ->
+            registrarMetadatosChatInsertados(dto)
+        }.onFailure { err ->
+            _state.update {
+                it.copy(snackbarMessage = err.message ?: "No se pudieron confirmar los medicamentos")
+            }
+        }.getOrNull()
+    }
+
+    suspend fun deshacerMedicamentosMediAi(idsMedicamentos: List<Int>): Boolean {
+        val ids = idsMedicamentos.distinct().filter { it > 0 }
+        if (ids.isEmpty()) return false
+        var eliminados = 0
+        for (id in ids) {
+            if (repository.eliminarMedicamento(id).isSuccess) {
+                capacidadPorMedicamento.remove(id)
+                metadatosLocalesMed.remove(id)
+                eliminados++
+            }
+        }
+        if (eliminados > 0) {
+            _state.update {
+                it.copy(snackbarMessage = "Acción deshecha: $eliminados medicamento(s) eliminado(s)")
+            }
+            cargarDatos(silencioso = true)
+            return true
+        }
+        return false
     }
 
     /**
@@ -1307,6 +1409,20 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
     }
 
     companion object {
+        internal fun esIntencionInsertarMedicamentoLocal(query: String): Boolean {
+            val q = query.lowercase()
+                .replace("á", "a").replace("é", "e").replace("í", "i")
+                .replace("ó", "o").replace("ú", "u")
+                .trim()
+            if (q.contains("que pasa si") || q.contains("como debo guardar") || q.contains("donde guardar")) {
+                return false
+            }
+            return listOf(
+                "agrega", "añade", "anade", "inserta", "registra",
+                "anota", "programa", "recuerdame tomar", "dame de alta", "ponme "
+            ).any { q.contains(it) }
+        }
+
         internal fun parseHoraPrimeraTomaLocal(horaPrimeraToma: String, zone: ZoneId): LocalDateTime {
             val raw = horaPrimeraToma.trim()
             if (raw.isBlank() || raw.equals("Ahora", ignoreCase = true)) {
@@ -1602,15 +1718,31 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
 
     // --- Predictor Clínico ML de Abandono (Random Forest / Árbol / KNN + Torneo P05) ---
 
+    private fun resolverTargetPacienteMl(pacienteId: Int?): Int =
+        pacienteId
+            ?: _state.value.selectedPacienteId
+            ?: _state.value.cuidadorPanel?.idPaciente?.takeIf { it > 0 && _state.value.showVistaCuidador }
+            ?: _state.value.idUsuario
+
+    private fun construirRequestMlDesdeEstado(): AiAdherencePredictRequestDto {
+        val stats = _state.value.estadisticas
+        val adh = stats?.porcentajeGlobal ?: 100f
+        val activos = _state.value.botiquinItems.size.coerceAtLeast(1)
+        return AiAdherencePredictRequestDto(
+            edad = _state.value.edadUsuario,
+            medicamentosActivos = activos,
+            adherenciaHistoricaPct = adh,
+            retrasoPromedioMin = ((stats?.totalPospuestas ?: 0) * 15f).coerceAtLeast(0f),
+            tieneCuidador = if (_state.value.contactosApoyo.isNotEmpty()) 1 else 0
+        )
+    }
+
     fun onCargarEvaluacionMl(
         pacienteId: Int? = null,
         algoritmo: String = _state.value.algoritmoMlSeleccionado,
         silencioso: Boolean = false
     ) {
-        val targetId = pacienteId
-            ?: _state.value.selectedPacienteId
-            ?: _state.value.cuidadorPanel?.idPaciente?.takeIf { it > 0 && _state.value.showVistaCuidador }
-            ?: _state.value.idUsuario
+        val targetId = resolverTargetPacienteMl(pacienteId)
 
         if (!silencioso) {
             _state.update { it.copy(cargandoMl = true, algoritmoMlSeleccionado = algoritmo) }
@@ -1619,17 +1751,8 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
             val res = if (targetId > 0) {
                 repository.evaluarPacienteMl(pacienteId = targetId, algoritmo = algoritmo)
             } else {
-                val stats = _state.value.estadisticas
-                val adh = stats?.porcentajeGlobal ?: 100f
-                val activos = _state.value.botiquinItems.size
                 repository.predecirAdherenciaMl(
-                    request = AiAdherencePredictRequestDto(
-                        edad = _state.value.edadUsuario,
-                        medicamentosActivos = activos,
-                        adherenciaHistoricaPct = adh,
-                        retrasoPromedioMin = ((stats?.totalPospuestas ?: 0) * 15f).coerceAtLeast(0f),
-                        tieneCuidador = if (_state.value.contactosApoyo.isNotEmpty()) 1 else 0
-                    ),
+                    request = construirRequestMlDesdeEstado(),
                     algoritmo = algoritmo
                 )
             }
@@ -1666,6 +1789,66 @@ class HomeViewModel(private val repository: MedRepository) : ViewModel() {
         viewModelScope.launch {
             repository.obtenerTorneoModelosMl().onSuccess { torneo ->
                 _state.update { it.copy(torneoModelos = torneo) }
+            }
+        }
+    }
+
+    // --- Analítica Avanzada IA (Prácticas 06 a 15: Optimización, K-Means, PCA y MongoDB) ---
+
+    fun onCargarPerfilIntegral(
+        pacienteId: Int? = null,
+        algoritmo: String = _state.value.algoritmoMlSeleccionado
+    ) {
+        val targetId = resolverTargetPacienteMl(pacienteId)
+        _state.update { it.copy(cargandoAnaliticaAvanzada = true) }
+        viewModelScope.launch {
+            val perfilRes = if (targetId > 0) {
+                repository.evaluarPerfilIntegralPaciente(pacienteId = targetId, algoritmo = algoritmo)
+            } else {
+                repository.evaluarPerfilIntegralManual(
+                    request = construirRequestMlDesdeEstado(),
+                    algoritmo = algoritmo
+                )
+            }
+            perfilRes.fold(
+                onSuccess = { perfil ->
+                    _state.update { it.copy(perfilIntegral = perfil, cargandoAnaliticaAvanzada = false) }
+                    onCargarAnaliticaAvanzada(silencioso = true)
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            cargandoAnaliticaAvanzada = false,
+                            snackbarMessage = err.message ?: "No se pudo calcular el perfil integral IA"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onCargarAnaliticaAvanzada(silencioso: Boolean = false) {
+        if (!silencioso) {
+            _state.update { it.copy(cargandoAnaliticaAvanzada = true) }
+        }
+        viewModelScope.launch {
+            coroutineScope {
+                val optDef = async { repository.obtenerOptimizacionHiperparametrosP06() }
+                val segDef = async { repository.obtenerSegmentacionPca() }
+                val histDef = async { repository.obtenerHistorialReportesMongo(limite = 8) }
+
+                val optRes = optDef.await()
+                val segRes = segDef.await()
+                val histRes = histDef.await()
+
+                _state.update { prev ->
+                    prev.copy(
+                        cargandoAnaliticaAvanzada = false,
+                        optimizacionP06 = optRes.getOrNull() ?: prev.optimizacionP06,
+                        segmentacionPca = segRes.getOrNull() ?: prev.segmentacionPca,
+                        historialReportesMongo = histRes.getOrNull() ?: prev.historialReportesMongo
+                    )
+                }
             }
         }
     }

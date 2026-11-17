@@ -5,12 +5,35 @@ class AiChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=600)
     nombre_usuario: str | None = "Paciente"
     contexto_pantalla: str | None = "Hoy"
+    tz_offset_minutes: int | None = None
 
 
 class AiDossierPoint(BaseModel):
     label: str
     description: str
     icon_type: str = "info"  # warning, schedule, check, shield, info
+
+
+class AiChatMedicationActionItem(BaseModel):
+    id_medicamento: int | None = None
+    id_tratamiento: int | None = None
+    nombre: str
+    principio_activo: str = ""
+    dosis: str = "1 comprimido"
+    frecuencia_horas: int = 8
+    duracion_dias: int | None = None
+    hora_primera_toma: str | None = None
+    cantidad_stock: int = 30
+    forma_farmaceutica: str = "comprimidos"
+    color_pastilla: str = "blanco"
+    instrucciones_toma: str = "Tomar con abundante agua"
+    proposito: str = "Registrado por Medi IA"
+    contraindicaciones: str | None = None
+    es_critico: bool = False
+    permite_posponer: bool = True
+    alerta_alergia: str | None = None
+    alerta_interaccion: str | None = None
+    creado_en_bd: bool = False
 
 
 class AiChatResponse(BaseModel):
@@ -24,6 +47,13 @@ class AiChatResponse(BaseModel):
     full_voice_script: str
     model_used: str = "medi-clinico"
     using_ollama: bool = True
+    action_performed: str | None = None
+    medications_affected: list[AiChatMedicationActionItem] = Field(default_factory=list)
+
+
+class AiConfirmMedicationsRequest(BaseModel):
+    medicamentos: list[AiChatMedicationActionItem] = Field(..., min_length=1, max_length=8)
+    tz_offset_minutes: int | None = None
 
 
 class AiMedicationSuggestRequest(BaseModel):
@@ -105,4 +135,30 @@ class AiEvaluarPacienteResponse(AiAdherencePredictResponse):
     paciente_id: int
     nombre_paciente: str
     datos_clinicos_extraidos: dict[str, float | int]
+
+
+class AiPersistenciaMongoInfo(BaseModel):
+    guardado: bool
+    modo: str
+    id_analisis: str = ""
+    coleccion: str = ""
+    fecha_registro_utc: str = ""
+    detalle: str | None = None
+
+
+class AiPerfilIntegralResponse(BaseModel):
+    paciente_id: int
+    nombre_paciente: str
+    datos_clinicos_extraidos: dict[str, float | int]
+    prediccion: AiAdherencePredictResponse
+    cluster_kmeans: int
+    perfil_kmeans: str
+    distancia_centroide: float
+    umbral_atipico_p95: float
+    es_atipico: bool
+    pc1: float
+    pc2: float
+    recomendaciones_motor: list[str]
+    persistencia_mongo: AiPersistenciaMongoInfo
+
 

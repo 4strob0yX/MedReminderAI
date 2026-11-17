@@ -1,0 +1,15 @@
+experimento,parametro,val_f1,test_f1
+A_KNN_n_neighbors,3,0.9189,0.8
+A_KNN_n_neighbors,5,0.9444,0.7692
+A_KNN_n_neighbors,7,0.9444,0.8293
+A_KNN_n_neighbors,9,0.9444,0.8293
+A_KNN_n_neighbors,15,0.9231,0.8095
+B_RF_n_estimators,50,0.9,0.878
+B_RF_n_estimators,100,0.9,0.878
+B_RF_n_estimators,200,0.9231,0.878
+B_RF_n_estimators,500,0.9231,0.878
+C_DT_max_depth,2,0.7895,0.7692
+C_DT_max_depth,3,0.8108,0.8108
+C_DT_max_depth,5,0.8333,0.8421
+C_DT_max_depth,8,0.7895,0.8205
+C_DT_max_depth,None,0.7895,0.8205

@@ -1,5 +1,7 @@
 from app.services.ollama_service import (
+    _es_intencion_insertar_medicamento,
     _extraer_json_seguro,
+    _parsear_medicamentos_desde_texto,
     analizar_receta_ollama,
     consultar_medi_ollama,
     obtener_estado_ollama,
@@ -53,3 +55,41 @@ def test_analizar_receta_ollama():
     )
     assert len(res.medicamentos) >= 2
     assert any("Amoxicilina" in m.name for m in res.medicamentos)
+
+
+def test_deteccion_intencion_insertar_medicamento():
+    assert _es_intencion_insertar_medicamento("Agrega Paracetamol 500 mg cada 8 horas")
+    assert _es_intencion_insertar_medicamento("¿Puedes insertar Losartán 50 mg cada 12 horas?")
+    assert _es_intencion_insertar_medicamento("Quiero que añadas Omeprazol 20 mg en ayunas")
+    assert _es_intencion_insertar_medicamento("Recuérdame tomar Metformina 850 mg a las 8:00 AM")
+    assert _es_intencion_insertar_medicamento("Ponme Ibuprofeno 400 mg cada 8h")
+
+    # No confundir dudas clínicas o preguntas de almacenamiento con inserciones
+    assert not _es_intencion_insertar_medicamento("¿Puedo tomar paracetamol para el dolor?")
+    assert not _es_intencion_insertar_medicamento("¿Cómo debo guardar mi insulina?")
+    assert not _es_intencion_insertar_medicamento("¿Qué pasa si agrego ibuprofeno a mi tratamiento?")
+    assert not _es_intencion_insertar_medicamento("Olvidé mi dosis de la mañana")
+
+
+def test_parsear_medicamentos_desde_texto_libre():
+    meds = _parsear_medicamentos_desde_texto(
+        "Agrega Paracetamol 500 mg cada 8 horas por 5 días con 20 tabletas a las 8:00 a.m. e Ibuprofeno 400 mg cada 12 horas"
+    )
+    assert len(meds) == 2
+    assert meds[0]["nombre"] == "Paracetamol"
+    assert meds[0]["dosis"] == "500 mg"
+    assert meds[0]["frecuencia_horas"] == 8
+    assert meds[0]["duracion_dias"] == 5
+    assert meds[0]["cantidad_stock"] == 20
+    assert meds[0]["hora_primera_toma"] == "08:00"
+    assert meds[1]["nombre"] == "Ibuprofeno"
+    assert meds[1]["dosis"] == "400 mg"
+    assert meds[1]["frecuencia_horas"] == 12
+
+
+def test_parsear_medicamento_vitamina_sin_recortar_letra():
+    meds = _parsear_medicamentos_desde_texto("Inserta Vitamina D 1000 UI una vez al día")
+    assert len(meds) == 1
+    assert meds[0]["nombre"] == "Vitamina D"
+    assert meds[0]["dosis"] == "1000 UI"
+    assert meds[0]["frecuencia_horas"] == 24

@@ -5,8 +5,10 @@ import com.medreminder.ai.data.local.LocalCacheStore
 import com.medreminder.ai.data.local.OfflineSyncWorker
 import com.medreminder.ai.data.local.TokenStore
 import com.medreminder.ai.data.remote.AiAdherencePredictRequestDto
+import com.medreminder.ai.data.remote.AiChatMedicationActionItemDto
 import com.medreminder.ai.data.remote.AiChatRequestDto
 import com.medreminder.ai.data.remote.AiChatResponseDto
+import com.medreminder.ai.data.remote.AiConfirmMedicationsRequestDto
 import com.medreminder.ai.data.remote.AiEvaluarPacienteResponseDto
 import com.medreminder.ai.data.remote.AiMedicationSuggestRequestDto
 import com.medreminder.ai.data.remote.AiMedicationSuggestResponseDto
@@ -30,6 +32,10 @@ import com.medreminder.ai.data.remote.MedicamentoDto
 import com.medreminder.ai.data.remote.PacienteVinculadoItemDto
 import com.medreminder.ai.data.remote.RecordatorioDto
 import com.medreminder.ai.data.remote.StockUpdateDto
+import com.medreminder.ai.data.remote.HistorialReportesMongoResponseDto
+import com.medreminder.ai.data.remote.OptimizacionP06ResponseDto
+import com.medreminder.ai.data.remote.PerfilIntegralResponseDto
+import com.medreminder.ai.data.remote.SegmentacionPcaResponseDto
 import com.medreminder.ai.data.remote.TorneoModelosResponseDto
 import com.medreminder.ai.data.remote.TratamientoCreateDto
 import com.medreminder.ai.data.remote.TratamientoDto
@@ -432,13 +438,27 @@ class MedRepository(
     suspend fun consultarMediAi(
         query: String,
         nombreUsuario: String? = "Paciente",
-        contextoPantalla: String? = "Hoy"
+        contextoPantalla: String? = "Hoy",
+        tzOffsetMinutes: Int? = null
     ): Result<AiChatResponseDto> = safeCall {
         api.consultarMediAi(
             AiChatRequestDto(
                 query = query.trim(),
                 nombreUsuario = nombreUsuario,
-                contextoPantalla = contextoPantalla
+                contextoPantalla = contextoPantalla,
+                tzOffsetMinutes = tzOffsetMinutes
+            )
+        )
+    }
+
+    suspend fun confirmarMedicamentosAi(
+        medicamentos: List<AiChatMedicationActionItemDto>,
+        tzOffsetMinutes: Int? = null
+    ): Result<AiChatResponseDto> = safeCall {
+        api.confirmarMedicamentosAi(
+            AiConfirmMedicationsRequestDto(
+                medicamentos = medicamentos,
+                tzOffsetMinutes = tzOffsetMinutes
             )
         )
     }
@@ -475,6 +495,32 @@ class MedRepository(
 
     suspend fun obtenerTorneoModelosMl(): Result<TorneoModelosResponseDto> = safeCall {
         api.obtenerTorneoModelosMl()
+    }
+
+    suspend fun obtenerOptimizacionHiperparametrosP06(): Result<OptimizacionP06ResponseDto> = safeCall {
+        api.obtenerOptimizacionHiperparametrosP06()
+    }
+
+    suspend fun obtenerSegmentacionPca(): Result<SegmentacionPcaResponseDto> = safeCall {
+        api.obtenerSegmentacionPca()
+    }
+
+    suspend fun evaluarPerfilIntegralPaciente(
+        pacienteId: Int,
+        algoritmo: String = "random_forest"
+    ): Result<PerfilIntegralResponseDto> = safeCall {
+        api.evaluarPerfilIntegralPaciente(pacienteId = pacienteId, algoritmo = algoritmo)
+    }
+
+    suspend fun evaluarPerfilIntegralManual(
+        request: AiAdherencePredictRequestDto,
+        algoritmo: String = "random_forest"
+    ): Result<PerfilIntegralResponseDto> = safeCall {
+        api.evaluarPerfilIntegralManual(body = request, algoritmo = algoritmo)
+    }
+
+    suspend fun obtenerHistorialReportesMongo(limite: Int = 10): Result<HistorialReportesMongoResponseDto> = safeCall {
+        api.obtenerHistorialReportesMongo(limite = limite)
     }
 
     // --- Perfil de Usuario, Vista del Cuidador y Vinculación ---

@@ -1,0 +1,4 @@
+algoritmo,f1_cv,tiempo_seg,hiperparametros
+Decision Tree,0.8518,2.572,"{'criterion': 'entropy', 'max_depth': 5, 'min_samples_leaf': 1, 'min_samples_split': 5}"
+Random Forest,0.9126,3.258,"{'max_depth': None, 'min_samples_split': 2, 'n_estimators': 100}"
+KNN,0.9447,0.165,"{'knn__metric': 'manhattan', 'knn__n_neighbors': 3, 'knn__weights': 'uniform'}"

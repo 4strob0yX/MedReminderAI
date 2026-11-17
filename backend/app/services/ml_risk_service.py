@@ -270,27 +270,21 @@ def predecir_adherencia_ml(
     }
 
 
-def evaluar_riesgo_paciente_en_bd(
-    db: Session,
-    paciente_id: int,
-    algoritmo: str = "random_forest",
-) -> dict[str, Any]:
+def extraer_metricas_clinicas_paciente(db: Session, paciente_id: int) -> dict[str, Any]:
     """
-    Extrae las métricas reales del paciente almacenadas en MySQL y las
-    pasa automáticamente por el modelo de predicción de Machine Learning seleccionado.
+    Extrae las 5 métricas clínicas reales del paciente desde MySQL
+    (edad, medicamentos_activos, adherencia_historica_pct, retraso_promedio_min, tiene_cuidador).
     """
     usuario = db.scalar(select(Usuario).where(Usuario.id_usuario == paciente_id))
     if not usuario:
         raise ValueError(f"Paciente con ID {paciente_id} no encontrado")
 
-    # 1. Calcular edad a partir de fecha_nacimiento
-    edad = 45  # Por defecto si no la tiene capturada
+    edad = 45
     if usuario.fecha_nacimiento:
         hoy = date.today()
         nac = usuario.fecha_nacimiento
         edad = max(1, hoy.year - nac.year - ((hoy.month, hoy.day) < (nac.month, nac.day)))
 
-    # 2. Contar medicamentos con tratamiento activo (o registrados si aún no hay tomas)
     num_meds = (
         db.scalar(
             select(func.count(func.distinct(Medicamento.id_medicamento)))
@@ -312,9 +306,8 @@ def evaluar_riesgo_paciente_en_bd(
             or 0
         )
     if num_meds == 0:
-        num_meds = 1  # Base mínima para el vector de características
+        num_meds = 1
 
-    # 3. Calcular adherencia y retrasos promedio reales desde Recordatorio + HistorialToma
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
     recs = (
         db.execute(
@@ -335,10 +328,7 @@ def evaluar_riesgo_paciente_en_bd(
 
     total_recordatorios = len(recs)
     confirmados = sum(1 for r in recs if r.estado == "tomado")
-    if total_recordatorios > 0:
-        adherencia_pct = (confirmados / total_recordatorios) * 100.0
-    else:
-        adherencia_pct = 90.0
+    adherencia_pct = (confirmados / total_recordatorios) * 100.0 if total_recordatorios > 0 else 90.0
 
     hist_tomas = db.execute(
         select(HistorialToma.fecha_accion, Recordatorio.hora_programada)
@@ -365,7 +355,6 @@ def evaluar_riesgo_paciente_en_bd(
     else:
         retraso_min = 10.0 if total_recordatorios == 0 else 15.0
 
-    # 4. Verificar si tiene contacto de apoyo o un cuidador vinculado activamente
     tiene_contacto = (
         db.scalar(
             select(ContactoApoyo.id_contacto).where(ContactoApoyo.id_usuario == paciente_id)
@@ -383,17 +372,40 @@ def evaluar_riesgo_paciente_en_bd(
     )
     tiene_cuidador_int = 1 if (tiene_contacto or tiene_vinculado) else 0
 
-    # 5. Inferencia ML con el modelo elegido
+    return {
+        "paciente_id": paciente_id,
+        "nombre_paciente": usuario.nombre_completo,
+        "edad": edad,
+        "medicamentos_activos": num_meds,
+        "adherencia_historica_pct": round(adherencia_pct, 1),
+        "retraso_promedio_min": round(retraso_min, 1),
+        "tiene_cuidador": tiene_cuidador_int,
+        "ahora": ahora,
+    }
+
+
+def evaluar_riesgo_paciente_en_bd(
+    db: Session,
+    paciente_id: int,
+    algoritmo: str = "random_forest",
+) -> dict[str, Any]:
+    """
+    Extrae las métricas reales del paciente almacenadas en MySQL y las
+    pasa automáticamente por el modelo de predicción de Machine Learning seleccionado.
+    """
+    datos = extraer_metricas_clinicas_paciente(db, paciente_id)
+    ahora = datos["ahora"]
+    num_meds = datos["medicamentos_activos"]
+
     resultado = predecir_adherencia_ml(
-        edad=edad,
+        edad=datos["edad"],
         medicamentos_activos=num_meds,
-        adherencia_historica_pct=adherencia_pct,
-        retraso_promedio_min=retraso_min,
-        tiene_cuidador=tiene_cuidador_int,
+        adherencia_historica_pct=datos["adherencia_historica_pct"],
+        retraso_promedio_min=datos["retraso_promedio_min"],
+        tiene_cuidador=datos["tiene_cuidador"],
         algoritmo=algoritmo,
     )
 
-    # 6. Si es crítico, registrar alerta persistente evitando duplicar en las últimas 12 horas
     if resultado["alerta_disparada"]:
         alerta_reciente = db.scalar(
             select(AlertaCuidador.id_alerta).where(
@@ -429,15 +441,36 @@ def evaluar_riesgo_paciente_en_bd(
 
     return {
         "paciente_id": paciente_id,
-        "nombre_paciente": usuario.nombre_completo,
+        "nombre_paciente": datos["nombre_paciente"],
         "datos_clinicos_extraidos": {
-            "edad": edad,
+            "edad": datos["edad"],
             "medicamentos_activos": num_meds,
-            "adherencia_historica_pct": round(adherencia_pct, 1),
-            "retraso_promedio_min": round(retraso_min, 1),
-            "tiene_cuidador": tiene_cuidador_int,
+            "adherencia_historica_pct": datos["adherencia_historica_pct"],
+            "retraso_promedio_min": datos["retraso_promedio_min"],
+            "tiene_cuidador": datos["tiene_cuidador"],
         },
         "prediccion": resultado,
     }
 
-    return resultado
+
+def evaluar_perfil_integral_en_bd(
+    db: Session,
+    paciente_id: int,
+    algoritmo: str = "random_forest",
+    persistir_mongo: bool = True,
+) -> dict[str, Any]:
+    """Evalúa el perfil integral P10–P15 usando las métricas reales de MySQL del paciente."""
+    from app.services.ml_analytics_service import evaluar_perfil_integral_paciente
+
+    datos = extraer_metricas_clinicas_paciente(db, paciente_id)
+    return evaluar_perfil_integral_paciente(
+        edad=datos["edad"],
+        medicamentos_activos=datos["medicamentos_activos"],
+        adherencia_historica_pct=datos["adherencia_historica_pct"],
+        retraso_promedio_min=datos["retraso_promedio_min"],
+        tiene_cuidador=datos["tiene_cuidador"],
+        algoritmo=algoritmo,
+        id_usuario=paciente_id,
+        nombre_paciente=datos["nombre_paciente"],
+        persistir_mongo=persistir_mongo,
+    )

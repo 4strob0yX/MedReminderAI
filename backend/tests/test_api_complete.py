@@ -352,3 +352,108 @@ def test_analizar_receta_imagen_sin_ocr_ni_vision():
         )
     assert res.medicamentos == []
     assert "no se detectó texto ocr legible" in res.resumen_clinico.lower()
+
+
+def test_medi_chat_inserta_medicamentos_y_valida_seguridad(db_client):
+    client, SessionLocal = db_client
+
+    reg = client.post(
+        "/auth/register",
+        json={
+            "nombre": "Carlos Vega",
+            "email": "carlos.medi@example.com",
+            "password": "Password123!",
+            "fecha_nacimiento": "1988-02-15",
+            "rol": "paciente",
+        },
+    )
+    assert reg.status_code == 201
+    token = reg.json()["access_token"]
+
+    # Registrar alergia a Penicilina para validar Regla 1 al pedirle medicamentos a Medi
+    al = client.post(
+        "/alergias",
+        headers=_auth_header(token),
+        json={"sustancia": "Penicilina", "severidad": "grave", "reaccion": "Anafilaxia"},
+    )
+    assert al.status_code == 201
+
+    with patch(
+        "app.services.ollama_service._resolve_ollama_endpoint",
+        return_value=(None, "medi-clinico", []),
+    ):
+        # 1. Consulta clínica normal NO inserta nada
+        qa = client.post(
+            "/ai/chat",
+            headers=_auth_header(token),
+            json={"query": "¿Puedo tomar paracetamol para el dolor?", "tz_offset_minutes": -360},
+        )
+        assert qa.status_code == 200
+        assert qa.json()["action_performed"] is None
+        assert qa.json()["medications_affected"] == []
+
+        # 2. Comando vago sin nombre pide detalles y NO inserta basura
+        vague = client.post(
+            "/ai/chat",
+            headers=_auth_header(token),
+            json={"query": "Agrega un medicamento", "tz_offset_minutes": -360},
+        )
+        assert vague.status_code == 200
+        assert vague.json()["action_performed"] == "needs_medication_details"
+
+        # 3. Comando seguro múltiple inserta medicamentos, tratamientos y recordatorios en BD
+        ins = client.post(
+            "/ai/chat",
+            headers=_auth_header(token),
+            json={
+                "query": "Agrega Paracetamol 500 mg cada 8 horas por 5 días con 20 tabletas a las 08:00 a.m. y Omeprazol 20 mg en ayunas",
+                "tz_offset_minutes": -360,
+            },
+        )
+        assert ins.status_code == 200
+        body = ins.json()
+        assert body["action_performed"] == "inserted_medications"
+        assert len(body["medications_affected"]) == 2
+        assert all(m["creado_en_bd"] is True and m["id_medicamento"] for m in body["medications_affected"])
+        assert body["medications_affected"][0]["cantidad_stock"] == 20
+
+        meds_res = client.get("/medicamentos", headers=_auth_header(token))
+        assert meds_res.status_code == 200
+        meds = meds_res.json()
+        assert len(meds) == 2
+
+        with SessionLocal() as db:
+            recs = db.scalars(select(Recordatorio)).all()
+            assert len(recs) >= 1
+
+        # 4. Comando con alergia cruzada (Penicilina -> Amoxicilina) NO inserta automáticamente
+        risky = client.post(
+            "/ai/chat",
+            headers=_auth_header(token),
+            json={
+                "query": "Inserta Amoxicilina 500 mg cada 8 horas",
+                "tz_offset_minutes": -360,
+            },
+        )
+        assert risky.status_code == 200
+        r_body = risky.json()
+        assert r_body["action_performed"] == "confirm_medications"
+        assert len(r_body["medications_affected"]) == 1
+        assert r_body["medications_affected"][0]["creado_en_bd"] is False
+        assert r_body["medications_affected"][0]["alerta_alergia"] is not None
+
+        # Verificar que siguen siendo 2 medicamentos en BD antes de confirmar
+        assert len(client.get("/medicamentos", headers=_auth_header(token)).json()) == 2
+
+        # 5. Confirmación explícita persiste el medicamento propuesto
+        conf = client.post(
+            "/ai/confirmar-medicamentos",
+            headers=_auth_header(token),
+            json={
+                "medicamentos": r_body["medications_affected"],
+                "tz_offset_minutes": -360,
+            },
+        )
+        assert conf.status_code == 200
+        assert conf.json()["action_performed"] == "inserted_medications"
+        assert len(client.get("/medicamentos", headers=_auth_header(token)).json()) == 3

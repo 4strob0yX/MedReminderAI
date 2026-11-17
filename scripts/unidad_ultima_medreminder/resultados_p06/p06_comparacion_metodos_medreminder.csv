@@ -1,0 +1,4 @@
+algoritmo,f1_cv_grid,tiempo_seg_grid,f1_cv_random,tiempo_seg_random
+Decision Tree,0.8518,2.572,0.8444,0.101
+Random Forest,0.9126,3.258,0.8974,1.393
+KNN,0.9447,0.165,0.9447,0.113

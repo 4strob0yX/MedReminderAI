@@ -141,13 +141,36 @@ data class VerificarAlergiasOutDto(
 data class AiChatRequestDto(
     val query: String,
     @SerializedName("nombre_usuario") val nombreUsuario: String? = "Paciente",
-    @SerializedName("contexto_pantalla") val contextoPantalla: String? = "Hoy"
+    @SerializedName("contexto_pantalla") val contextoPantalla: String? = "Hoy",
+    @SerializedName("tz_offset_minutes") val tzOffsetMinutes: Int? = null
 )
 
 data class AiDossierPointDto(
     val label: String,
     val description: String,
     @SerializedName("icon_type") val iconType: String = "info"
+)
+
+data class AiChatMedicationActionItemDto(
+    @SerializedName("id_medicamento") val idMedicamento: Int? = null,
+    @SerializedName("id_tratamiento") val idTratamiento: Int? = null,
+    val nombre: String,
+    @SerializedName("principio_activo") val principioActivo: String = "",
+    val dosis: String = "1 comprimido",
+    @SerializedName("frecuencia_horas") val frecuenciaHoras: Int = 8,
+    @SerializedName("duracion_dias") val duracionDias: Int? = null,
+    @SerializedName("hora_primera_toma") val horaPrimeraToma: String? = null,
+    @SerializedName("cantidad_stock") val cantidadStock: Int = 30,
+    @SerializedName("forma_farmaceutica") val formaFarmaceutica: String = "comprimidos",
+    @SerializedName("color_pastilla") val colorPastilla: String = "blanco",
+    @SerializedName("instrucciones_toma") val instruccionesToma: String = "Tomar con abundante agua",
+    val proposito: String = "Registrado por Medi IA",
+    val contraindicaciones: String? = null,
+    @SerializedName("es_critico") val esCritico: Boolean = false,
+    @SerializedName("permite_posponer") val permitePosponer: Boolean = true,
+    @SerializedName("alerta_alergia") val alertaAlergia: String? = null,
+    @SerializedName("alerta_interaccion") val alertaInteraccion: String? = null,
+    @SerializedName("creado_en_bd") val creadoEnBd: Boolean = false
 )
 
 data class AiChatResponseDto(
@@ -160,7 +183,14 @@ data class AiChatResponseDto(
     @SerializedName("golden_rule") val goldenRule: String,
     @SerializedName("full_voice_script") val fullVoiceScript: String,
     @SerializedName("model_used") val modelUsed: String = "medi-clinico",
-    @SerializedName("using_ollama") val usingOllama: Boolean = true
+    @SerializedName("using_ollama") val usingOllama: Boolean = true,
+    @SerializedName("action_performed") val actionPerformed: String? = null,
+    @SerializedName("medications_affected") val medicationsAffected: List<AiChatMedicationActionItemDto> = emptyList()
+)
+
+data class AiConfirmMedicationsRequestDto(
+    val medicamentos: List<AiChatMedicationActionItemDto>,
+    @SerializedName("tz_offset_minutes") val tzOffsetMinutes: Int? = null
 )
 
 data class AiMedicationSuggestRequestDto(
@@ -316,6 +346,131 @@ data class TorneoModelosResponseDto(
     @SerializedName("particion_datos") val particionDatos: Map<String, String> = emptyMap(),
     @SerializedName("tabla_comparativa") val tablaComparativa: List<TorneoModeloItemDto> = emptyList(),
     @SerializedName("criterio_seleccion") val criterioSeleccion: String = ""
+)
+
+// --- Prácticas 06 a 15: Optimización, K-Means + Atípicos, PCA 2D, Motor Integral y MongoDB ---
+
+data class OptimizacionMetodoItemDto(
+    val clave: String = "",
+    val algoritmo: String = "",
+    @SerializedName("grid_f1_cv_pct") val gridF1CvPct: Float = 0f,
+    @SerializedName("grid_tiempo_seg") val gridTiempoSeg: Float = 0f,
+    @SerializedName("grid_params") val gridParams: Map<String, String> = emptyMap(),
+    @SerializedName("random_f1_cv_pct") val randomF1CvPct: Float = 0f,
+    @SerializedName("random_tiempo_seg") val randomTiempoSeg: Float = 0f,
+    @SerializedName("random_params") val randomParams: Map<String, String> = emptyMap()
+)
+
+data class OptimizacionP06ResponseDto(
+    @SerializedName("algoritmo_ganador") val algoritmoGanador: String = "random_forest",
+    @SerializedName("algoritmo_ganador_nombre") val algoritmoGanadorNombre: String = "",
+    @SerializedName("hiperparametros_optimos") val hiperparametrosOptimos: Map<String, String> = emptyMap(),
+    @SerializedName("f1_cv_ganador_pct") val f1CvGanadorPct: Float = 0f,
+    @SerializedName("metricas_prueba") val metricasPrueba: Map<String, Float> = emptyMap(),
+    @SerializedName("comparativa_metodos") val comparativaMetodos: List<OptimizacionMetodoItemDto> = emptyList(),
+    @SerializedName("estrategia_cv") val estrategiaCv: String = ""
+)
+
+data class EvaluacionKItemDto(
+    val k: Int = 3,
+    val inercia: Float = 0f,
+    val silhouette: Float = 0f
+)
+
+data class InicializacionItemDto(
+    val metodo: String = "",
+    @SerializedName("inercia_promedio") val inerciaPromedio: Float = 0f,
+    @SerializedName("silhouette_promedio") val silhouettePromedio: Float = 0f
+)
+
+data class EscaladorItemDto(
+    val escalador: String = "",
+    val inercia: Float = 0f,
+    val silhouette: Float = 0f
+)
+
+data class EstabilidadAriDto(
+    @SerializedName("ari_promedio") val ariPromedio: Float = 0f,
+    @SerializedName("ari_minimo") val ariMinimo: Float = 0f,
+    @SerializedName("ari_maximo") val ariMaximo: Float = 0f
+)
+
+data class PerfilKmeansItemDto(
+    val cluster: Int = 0,
+    val perfil: String = "",
+    @SerializedName("total_pacientes") val totalPacientes: Int = 0,
+    @SerializedName("edad_promedio") val edadPromedio: Float = 0f,
+    @SerializedName("medicamentos_promedio") val medicamentosPromedio: Float = 0f,
+    @SerializedName("adherencia_promedio_pct") val adherenciaPromedioPct: Float = 0f,
+    @SerializedName("retraso_promedio_min") val retrasoPromedioMin: Float = 0f,
+    @SerializedName("proporcion_cuidador_pct") val proporcionCuidadorPct: Float = 0f
+)
+
+data class PuntoPcaDto(
+    @SerializedName("id_paciente") val idPaciente: String = "",
+    val pc1: Float = 0f,
+    val pc2: Float = 0f,
+    val cluster: Int = 0,
+    val perfil: String = "",
+    val atipico: Boolean = false
+)
+
+data class SegmentacionPcaResponseDto(
+    @SerializedName("total_pacientes_cohorte") val totalPacientesCohorte: Int = 0,
+    @SerializedName("evaluacion_k") val evaluacionK: List<EvaluacionKItemDto> = emptyList(),
+    @SerializedName("comparativa_inicializaciones") val comparativaInicializaciones: List<InicializacionItemDto> = emptyList(),
+    @SerializedName("comparativa_escaladores") val comparativaEscaladores: List<EscaladorItemDto> = emptyList(),
+    @SerializedName("estabilidad_ari") val estabilidadAri: EstabilidadAriDto = EstabilidadAriDto(),
+    @SerializedName("umbral_atipicos_p95") val umbralAtipicosP95: Float = 0f,
+    @SerializedName("total_atipicos_detectados") val totalAtipicosDetectados: Int = 0,
+    @SerializedName("perfiles_kmeans") val perfilesKmeans: List<PerfilKmeansItemDto> = emptyList(),
+    @SerializedName("pca_varianza_explicada_pct") val pcaVarianzaExplicadaPct: Map<String, Float> = emptyMap(),
+    @SerializedName("pca_error_reconstruccion_mse") val pcaErrorReconstruccionMse: Float = 0f,
+    @SerializedName("pca_cargas") val pcaCargas: Map<String, Map<String, Float>> = emptyMap(),
+    @SerializedName("puntos_proyectados") val puntosProyectados: List<PuntoPcaDto> = emptyList()
+)
+
+data class PersistenciaMongoDto(
+    val guardado: Boolean = false,
+    val modo: String = "",
+    @SerializedName("id_analisis") val idAnalisis: String = "",
+    val coleccion: String = "",
+    @SerializedName("fecha_registro_utc") val fechaRegistroUtc: String = "",
+    val detalle: String? = null
+)
+
+data class PerfilIntegralResponseDto(
+    @SerializedName("paciente_id") val pacienteId: Int = 0,
+    @SerializedName("nombre_paciente") val nombrePaciente: String = "",
+    @SerializedName("datos_clinicos_extraidos") val datosClinicosExtraidos: Map<String, Float> = emptyMap(),
+    val prediccion: AiEvaluarPacienteResponseDto = AiEvaluarPacienteResponseDto(),
+    @SerializedName("cluster_kmeans") val clusterKmeans: Int = 0,
+    @SerializedName("perfil_kmeans") val perfilKmeans: String = "",
+    @SerializedName("distancia_centroide") val distanciaCentroide: Float = 0f,
+    @SerializedName("umbral_atipico_p95") val umbralAtipicoP95: Float = 0f,
+    @SerializedName("es_atipico") val esAtipico: Boolean = false,
+    val pc1: Float = 0f,
+    val pc2: Float = 0f,
+    @SerializedName("recomendaciones_motor") val recomendacionesMotor: List<String> = emptyList(),
+    @SerializedName("persistencia_mongo") val persistenciaMongo: PersistenciaMongoDto = PersistenciaMongoDto()
+)
+
+data class HistorialReporteItemDto(
+    @SerializedName("id_analisis") val idAnalisis: String = "",
+    val sistema: String = "",
+    val etapa: String = "",
+    @SerializedName("fecha_registro_utc") val fechaRegistroUtc: String = "",
+    val datos: Map<String, Any> = emptyMap()
+)
+
+data class HistorialReportesMongoResponseDto(
+    val disponible: Boolean = false,
+    val modo: String = "",
+    @SerializedName("base_datos") val baseDatos: String = "",
+    val coleccion: String = "",
+    val total: Int = 0,
+    val registros: List<HistorialReporteItemDto> = emptyList(),
+    val detalle: String? = null
 )
 
 data class AlertaCuidadorCreateDto(

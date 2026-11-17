@@ -1,0 +1,11 @@
+inicializacion,semilla,inercia,silhouette
+k-means++,10,870.596,0.3624
+k-means++,20,754.276,0.3683
+k-means++,30,753.277,0.4163
+k-means++,42,753.277,0.4163
+k-means++,99,753.272,0.4168
+random,10,754.276,0.3683
+random,20,754.276,0.3683
+random,30,753.277,0.4163
+random,42,753.272,0.4168
+random,99,754.276,0.3683

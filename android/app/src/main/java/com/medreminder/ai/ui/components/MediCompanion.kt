@@ -1,6 +1,7 @@
 package com.medreminder.ai.ui.components
 
 import android.content.Context
+import com.medreminder.ai.data.remote.AiChatMedicationActionItemDto
 import com.medreminder.ai.data.remote.AiChatResponseDto
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -63,13 +64,17 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessAlarm
+import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HealthAndSafety
@@ -875,7 +880,11 @@ fun DraggableMediCompanion(
     reaction: MediReaction? = null,
     nombreUsuario: String = "Paciente",
     contextoPantalla: String = "Hoy",
-    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null
+    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null,
+    onConfirmMedications: (suspend (List<AiChatMedicationActionItemDto>) -> AiChatResponseDto?)? = null,
+    onUndoInsertedMedications: (suspend (List<Int>) -> Boolean)? = null,
+    onOpenBotiquin: () -> Unit = {},
+    onOpenNuevoMedicamento: () -> Unit = {}
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
@@ -1233,7 +1242,11 @@ fun DraggableMediCompanion(
                 contextoPantalla = contextoPantalla,
                 onDismiss = dismissChat,
                 onMoodChange = { currentMood = it },
-                onAskAi = onAskAi
+                onAskAi = onAskAi,
+                onConfirmMedications = onConfirmMedications,
+                onUndoInsertedMedications = onUndoInsertedMedications,
+                onOpenBotiquin = onOpenBotiquin,
+                onOpenNuevoMedicamento = onOpenNuevoMedicamento
             )
         }
 
@@ -1736,7 +1749,10 @@ data class QuickClinicalTopic(
     val icon: ImageVector
 )
 
+private const val QUERY_PREFILL_AGREGAR = "__PREFILL_AGREGAR__"
+
 private val QUICK_CLINICAL_TOPICS = listOf(
+    QuickClinicalTopic(QUERY_PREFILL_AGREGAR, "Agregar medicamento", Icons.Outlined.AddCircleOutline),
     QuickClinicalTopic("¿Puedo tomar café con mi medicamento?", "Café y fármacos", Icons.Outlined.AccessAlarm),
     QuickClinicalTopic("¿Qué hago si olvidé mi dosis?", "Dosis olvidada", Icons.Outlined.Shield),
     QuickClinicalTopic("¿Puedo tomar alcohol con mis medicamentos?", "Alcohol y peligro", Icons.Outlined.Warning),
@@ -1754,7 +1770,8 @@ private val QUICK_CLINICAL_TOPICS = listOf(
  * Cuadro de Texto Emergente Directo de Medi:
  * Emerge directamente desde la mascota flotante con animación elástica (TransformOrigin(0.5f, 0f)).
  * Dispone de dictado por voz local continuo con fallback automático a dictado de Google nativo,
- * lectura en voz alta TTS interactiva con 1 toque, respuestas clínicas tipo dossier y selector de tópicos.
+ * lectura en voz alta TTS interactiva con 1 toque, respuestas clínicas tipo dossier,
+ * inserción de medicamentos por voz/texto y selector de tópicos.
  */
 @Composable
 fun MediDirectEmergentChatCard(
@@ -1762,7 +1779,11 @@ fun MediDirectEmergentChatCard(
     contextoPantalla: String = "Hoy",
     onDismiss: () -> Unit,
     onMoodChange: (MediMood) -> Unit = {},
-    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null
+    onAskAi: (suspend (String, String) -> AiChatResponseDto?)? = null,
+    onConfirmMedications: (suspend (List<AiChatMedicationActionItemDto>) -> AiChatResponseDto?)? = null,
+    onUndoInsertedMedications: (suspend (List<Int>) -> Boolean)? = null,
+    onOpenBotiquin: () -> Unit = {},
+    onOpenNuevoMedicamento: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val a11y = LocalAccessibilitySettings.current
@@ -1771,16 +1792,74 @@ fun MediDirectEmergentChatCard(
     var userPrompt by remember { mutableStateOf("") }
     var isSpeaking by remember { mutableStateOf(false) }
     var isGenerating by remember { mutableStateOf(false) }
+    var isActionBusy by remember { mutableStateOf(false) }
 
     val isListening by VoiceInputHelper.isListening.collectAsState()
     val liveSpokenText by VoiceInputHelper.liveSpokenText.collectAsState()
     val soundLevel by VoiceInputHelper.soundLevel.collectAsState()
     val sttError by VoiceInputHelper.lastError.collectAsState()
 
-    val initialGreeting = "¡Hola, $nombreUsuario! Soy Medi, impulsado por el motor clínico Ollama (medi-clinico). ¿En qué puedo apoyarte hoy sobre tus medicamentos, tomas o alergias?"
+    val initialGreeting = "¡Hola, $nombreUsuario! Soy Medi. Puedo resolver tus dudas médicas o agregar nuevos medicamentos por ti (ej. «Agrega Paracetamol 500 mg cada 8 horas»). ¿En qué te apoyo?"
     var displayedText by remember { mutableStateOf(initialGreeting) }
     var activeGoldenRule by remember { mutableStateOf("") }
     var activeCategory by remember { mutableStateOf("MOTOR OLLAMA · MEDI-CLINICO") }
+    var activeActionPerformed by remember { mutableStateOf<String?>(null) }
+    var activeActionMedications by remember { mutableStateOf<List<AiChatMedicationActionItemDto>>(emptyList()) }
+
+    suspend fun renderAiResponse(remoteAi: AiChatResponseDto?, queryForFallback: String) {
+        val fullText: String
+        val voiceScript: String
+
+        if (remoteAi != null) {
+            activeGoldenRule = remoteAi.goldenRule
+            activeActionPerformed = remoteAi.actionPerformed
+            activeActionMedications = remoteAi.medicationsAffected
+            activeCategory = if (remoteAi.usingOllama) {
+                "OLLAMA · ${remoteAi.category.uppercase()}"
+            } else {
+                remoteAi.category.uppercase()
+            }
+            val pts = remoteAi.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
+            fullText = buildString {
+                append(remoteAi.keyInsight)
+                if (pts.isNotBlank()) {
+                    append("\n\n")
+                    append(pts)
+                }
+            }
+            voiceScript = remoteAi.fullVoiceScript.ifBlank { remoteAi.keyInsight }
+            when (remoteAi.actionPerformed) {
+                "inserted_medications" -> onMoodChange(MediMood.CELEBRATING)
+                "confirm_medications" -> onMoodChange(MediMood.ATTENTIVE)
+                else -> onMoodChange(MediMood.TALKING)
+            }
+        } else {
+            activeActionPerformed = null
+            activeActionMedications = emptyList()
+            val dossier = buildClinicalDossier(queryForFallback, nombreUsuario)
+            activeGoldenRule = dossier.goldenRule
+            activeCategory = dossier.category
+            fullText = "${dossier.keyInsight}\n\n" +
+                dossier.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
+            voiceScript = dossier.fullVoiceScript
+            onMoodChange(MediMood.TALKING)
+        }
+
+        displayedText = ""
+        isSpeaking = true
+        TtsHelper.speak(context, voiceScript, key = "medi_emergent_answer")
+
+        val words = fullText.split(" ")
+        for (i in words.indices) {
+            displayedText = words.take(i + 1).joinToString(" ")
+            delay(22)
+        }
+        isGenerating = false
+
+        delay(4800)
+        isSpeaking = false
+        onMoodChange(MediMood.NORMAL)
+    }
 
     val askQuestion: (String) -> Unit = { query ->
         VoiceInputHelper.stopListening()
@@ -1788,51 +1867,12 @@ fun MediDirectEmergentChatCard(
 
         coroutineScope.launch {
             isGenerating = true
-            displayedText = "Consultando motor clínico Ollama (medi-clinico)..."
+            activeActionPerformed = null
+            activeActionMedications = emptyList()
+            displayedText = "Analizando con motor clínico Ollama (medi-clinico)..."
 
             val remoteAi = runCatching { onAskAi?.invoke(query, contextoPantalla) }.getOrNull()
-            val fullText: String
-            val voiceScript: String
-
-            if (remoteAi != null) {
-                activeGoldenRule = remoteAi.goldenRule
-                activeCategory = if (remoteAi.usingOllama) {
-                    "OLLAMA · ${remoteAi.category.uppercase()}"
-                } else {
-                    remoteAi.category.uppercase()
-                }
-                val pts = remoteAi.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
-                fullText = buildString {
-                    append(remoteAi.keyInsight)
-                    if (pts.isNotBlank()) {
-                        append("\n\n")
-                        append(pts)
-                    }
-                }
-                voiceScript = remoteAi.fullVoiceScript.ifBlank { remoteAi.keyInsight }
-            } else {
-                val dossier = buildClinicalDossier(query, nombreUsuario)
-                activeGoldenRule = dossier.goldenRule
-                activeCategory = dossier.category
-                fullText = "${dossier.keyInsight}\n\n" +
-                    dossier.points.joinToString("\n") { pt -> "• ${pt.label}: ${pt.description}" }
-                voiceScript = dossier.fullVoiceScript
-            }
-
-            displayedText = ""
-            isSpeaking = true
-            TtsHelper.speak(context, voiceScript, key = "medi_emergent_answer")
-
-            val words = fullText.split(" ")
-            for (i in words.indices) {
-                displayedText = words.take(i + 1).joinToString(" ")
-                delay(22)
-            }
-            isGenerating = false
-
-            delay(4800)
-            isSpeaking = false
-            onMoodChange(MediMood.NORMAL)
+            renderAiResponse(remoteAi, query)
         }
     }
 
@@ -2116,6 +2156,196 @@ fun MediDirectEmergentChatCard(
                                     }
                                 }
                             }
+                            if (!isGenerating && activeActionPerformed != null) {
+                                Spacer(Modifier.height(10.dp))
+                                if (activeActionMedications.isNotEmpty()) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        activeActionMedications.forEach { med ->
+                                            val tieneAlerta = !med.alertaAlergia.isNullOrBlank() || !med.alertaInteraccion.isNullOrBlank()
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = when {
+                                                    !med.alertaAlergia.isNullOrBlank() -> Color(0xFFEF4444).copy(alpha = 0.12f)
+                                                    !med.alertaInteraccion.isNullOrBlank() -> Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                                    else -> TealPrimary.copy(alpha = 0.08f)
+                                                },
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    when {
+                                                        !med.alertaAlergia.isNullOrBlank() -> Color(0xFFEF4444).copy(alpha = 0.45f)
+                                                        !med.alertaInteraccion.isNullOrBlank() -> Color(0xFFF59E0B).copy(alpha = 0.45f)
+                                                        else -> TealPrimary.copy(alpha = 0.30f)
+                                                    }
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = med.nombre,
+                                                            fontSize = 12.5.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = a11y.adaptiveTextPrimary,
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        if (med.esCritico) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(50),
+                                                                color = Color(0xFFEF4444).copy(alpha = 0.16f)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Crítico",
+                                                                    fontSize = 9.5.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFFDC2626),
+                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    Spacer(Modifier.height(2.dp))
+                                                    Text(
+                                                        text = buildString {
+                                                            append("${med.dosis} · Cada ${med.frecuenciaHoras}h · Stock: ${med.cantidadStock}")
+                                                            med.horaPrimeraToma?.let { append(" · Inicio $it") }
+                                                            med.duracionDias?.let { append(" · $it d") }
+                                                        },
+                                                        fontSize = 11.sp,
+                                                        color = a11y.adaptiveTextSecondary
+                                                    )
+                                                    if (tieneAlerta) {
+                                                        Spacer(Modifier.height(4.dp))
+                                                        Text(
+                                                            text = med.alertaAlergia ?: med.alertaInteraccion ?: "",
+                                                            fontSize = 10.5.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = if (!med.alertaAlergia.isNullOrBlank()) Color(0xFFDC2626) else Color(0xFFD97706)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                }
+
+                                when (activeActionPerformed) {
+                                    "inserted_medications" -> {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    safeDismiss()
+                                                    onOpenBotiquin()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Ver Botiquín", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            val idsInsertados = activeActionMedications.mapNotNull { it.idMedicamento }
+                                            if (idsInsertados.isNotEmpty() && onUndoInsertedMedications != null) {
+                                                OutlinedButton(
+                                                    enabled = !isActionBusy,
+                                                    onClick = {
+                                                        coroutineScope.launch {
+                                                            isActionBusy = true
+                                                            val ok = runCatching { onUndoInsertedMedications(idsInsertados) }.getOrDefault(false)
+                                                            isActionBusy = false
+                                                            if (ok) {
+                                                                activeActionPerformed = null
+                                                                activeActionMedications = emptyList()
+                                                                activeGoldenRule = ""
+                                                                displayedText = "Listo, eliminé los medicamentos recién agregados de tu botiquín."
+                                                            }
+                                                        }
+                                                    },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    modifier = Modifier.weight(0.9f)
+                                                ) {
+                                                    Text(
+                                                        if (isActionBusy) "Quitando..." else "Deshacer",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "confirm_medications" -> {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (onConfirmMedications != null && activeActionMedications.isNotEmpty()) {
+                                                val hayAlergia = activeActionMedications.any { !it.alertaAlergia.isNullOrBlank() }
+                                                Button(
+                                                    enabled = !isActionBusy,
+                                                    onClick = {
+                                                        coroutineScope.launch {
+                                                            isActionBusy = true
+                                                            val pending = activeActionMedications
+                                                            val confirmedResp = runCatching { onConfirmMedications(pending) }.getOrNull()
+                                                            isActionBusy = false
+                                                            if (confirmedResp != null) {
+                                                                isGenerating = true
+                                                                renderAiResponse(confirmedResp, userPrompt)
+                                                            }
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = if (hayAlergia) Color(0xFFDC2626) else Color(0xFFD97706)
+                                                    ),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    modifier = Modifier.weight(1.2f)
+                                                ) {
+                                                    Text(
+                                                        if (isActionBusy) "Guardando..." else "Confirmar e insertar",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                            OutlinedButton(
+                                                enabled = !isActionBusy,
+                                                onClick = {
+                                                    activeActionPerformed = null
+                                                    activeActionMedications = emptyList()
+                                                    activeGoldenRule = ""
+                                                    displayedText = "Entendido, no guardé ningún medicamento para proteger tu seguridad."
+                                                    onMoodChange(MediMood.NORMAL)
+                                                },
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.weight(0.8f)
+                                            ) {
+                                                Text("Cancelar", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    "needs_medication_details", "offline_error" -> {
+                                        OutlinedButton(
+                                            onClick = {
+                                                safeDismiss()
+                                                onOpenNuevoMedicamento()
+                                            },
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Abrir formulario Nuevo Medicamento", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -2133,7 +2363,16 @@ fun MediDirectEmergentChatCard(
                                 border = BorderStroke(0.8.dp, a11y.adaptiveBorder),
                                 modifier = Modifier
                                     .bounceClick()
-                                    .clickable { askQuestion(q.query) }
+                                    .clickable {
+                                        if (q.query == QUERY_PREFILL_AGREGAR) {
+                                            userPrompt = "Agrega Paracetamol 500 mg cada 8 horas"
+                                            activeActionPerformed = null
+                                            activeActionMedications = emptyList()
+                                            displayedText = "Edita el texto o usa el micrófono para decirme el medicamento, dosis y horario que quieres que agregue."
+                                        } else {
+                                            askQuestion(q.query)
+                                        }
+                                    }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -2239,8 +2478,10 @@ fun MediDirectEmergentChatCard(
                         onValueChange = { userPrompt = it },
                         placeholder = {
                             Text(
-                                text = if (isListening) "Escuchando tu voz..." else "Pregúntale a Medi...",
-                                fontSize = 12.5.sp,
+                                text = if (isListening) "Escuchando tu voz..." else "Pregúntale o dile: Agrega Paracetamol...",
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 color = if (isListening) Color(0xFFEF4444) else a11y.adaptiveTextSecondary
                             )
                         },
@@ -2254,6 +2495,16 @@ fun MediDirectEmergentChatCard(
                             unfocusedContainerColor = a11y.adaptiveSoftSurface
                         ),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (userPrompt.isNotBlank()) {
+                                    val text = userPrompt
+                                    userPrompt = ""
+                                    askQuestion(text)
+                                }
+                            }
+                        ),
                         modifier = Modifier.weight(1f)
                     )
 

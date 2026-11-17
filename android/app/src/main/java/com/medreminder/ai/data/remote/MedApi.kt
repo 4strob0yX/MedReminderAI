@@ -165,6 +165,9 @@ interface MedApi {
     @POST("ai/chat")
     suspend fun consultarMediAi(@Body body: AiChatRequestDto): AiChatResponseDto
 
+    @POST("ai/confirmar-medicamentos")
+    suspend fun confirmarMedicamentosAi(@Body body: AiConfirmMedicationsRequestDto): AiChatResponseDto
+
     @POST("ai/sugerir-medicamento")
     suspend fun sugerirMedicamentoAi(@Body body: AiMedicationSuggestRequestDto): AiMedicationSuggestResponseDto
 
@@ -186,5 +189,29 @@ interface MedApi {
 
     @GET("ai/torneo-modelos")
     suspend fun obtenerTorneoModelosMl(): TorneoModelosResponseDto
+
+    // --- Analítica Avanzada IA (Prácticas 06 a 15) ---
+    @GET("ai/optimizacion-hiperparametros")
+    suspend fun obtenerOptimizacionHiperparametrosP06(): OptimizacionP06ResponseDto
+
+    @GET("ai/segmentacion-pca")
+    suspend fun obtenerSegmentacionPca(): SegmentacionPcaResponseDto
+
+    @GET("ai/perfil-integral/{id}")
+    suspend fun evaluarPerfilIntegralPaciente(
+        @Path("id") pacienteId: Int,
+        @Query("algoritmo") algoritmo: String = "random_forest"
+    ): PerfilIntegralResponseDto
+
+    @POST("ai/perfil-integral")
+    suspend fun evaluarPerfilIntegralManual(
+        @Body body: AiAdherencePredictRequestDto,
+        @Query("algoritmo") algoritmo: String = "random_forest"
+    ): PerfilIntegralResponseDto
+
+    @GET("ai/historial-reportes")
+    suspend fun obtenerHistorialReportesMongo(
+        @Query("limite") limite: Int = 10
+    ): HistorialReportesMongoResponseDto
 }
 

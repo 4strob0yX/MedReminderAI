@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta, timezone
 import json
 import logging
 import os
+import re
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.mongo import registrar_evento_mongo
 from app.models.alergia import AlergiaUsuario
 from app.models.medicamento import Medicamento
 from app.models.tratamiento import Tratamiento
 from app.models.usuario import Usuario
 from app.schemas.ai import (
+    AiChatMedicationActionItem,
     AiChatResponse,
     AiDossierPoint,
     AiMedicationSuggestResponse,
@@ -21,7 +26,12 @@ from app.schemas.ai import (
     AiPrescriptionScanResponse,
     AiStatusResponse,
 )
-from app.services.catalogo_service import buscar_en_catalogo, verificar_alergias_paciente
+from app.services.catalogo_service import (
+    REGLAS_INTERACCIONES,
+    buscar_en_catalogo,
+    verificar_alergias_paciente,
+)
+from app.services.recordatorio_service import generar_recordatorios, invalidar_cache_horizonte
 
 logger = logging.getLogger(__name__)
 
@@ -263,15 +273,894 @@ def _fallback_dossier_clinico(query: str, ctx: dict[str, Any]) -> AiChatResponse
     )
 
 
+_STOPWORDS_NOMBRE_MED = {
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "el",
+    "la",
+    "los",
+    "las",
+    "nuevo",
+    "nueva",
+    "nuevos",
+    "nuevas",
+    "medicamento",
+    "medicamentos",
+    "medicina",
+    "medicinas",
+    "tratamiento",
+    "tratamientos",
+    "recordatorio",
+    "recordatorios",
+    "pastilla",
+    "pastillas",
+    "tableta",
+    "tabletas",
+    "capsula",
+    "capsulas",
+    "comprimido",
+    "comprimidos",
+    "dosis",
+    "receta",
+    "ejemplo",
+    "ninguno",
+    "botiquin",
+    "mi",
+    "por",
+    "favor",
+    "gracias",
+    "medi",
+    "hola",
+    "de",
+    "para",
+    "con",
+    "en",
+    "y",
+    "e",
+}
+
+
+def _normalizar_texto(texto: str) -> str:
+    nfd = unicodedata.normalize("NFD", texto or "")
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
+
+
+def _normalizar_forma(raw_forma: str | None) -> str:
+    fn = _normalizar_texto(raw_forma or "")
+    if any(k in fn for k in ("gota", "jarabe", "solucion", "ml", "suspension")):
+        return "gotas"
+    if any(k in fn for k in ("inyec", "ampolla", "jeringa", "insulina", "pluma")):
+        return "inyectable"
+    return "comprimidos"
+
+
+def _es_intencion_insertar_medicamento(query: str) -> bool:
+    """Detecta si el usuario pide a Medi insertar/agregar/programar nuevos medicamentos."""
+    qn = re.sub(r"\s+", " ", _normalizar_texto(query)).strip()
+    if not qn:
+        return False
+
+    # Excluir preguntas hipotéticas o de almacenamiento físico
+    if re.search(
+        r"\b(que pasa si|que sucede si|que pasaria si|seria peligroso|como debo guardar|donde guardar|lugar para guardar)\b",
+        qn,
+    ):
+        return False
+    if re.search(r"\bsi\s+(agreg|anad|insert|registr|tom)\w*\b", qn) and not re.search(
+        r"\b(por favor|puedes|podrias|quiero)\b", qn
+    ):
+        return False
+
+    direct_verbs = re.search(
+        r"\b(agreg(?:a|ar|ame|arlo|arla|arlos|alas|lo|la|los|las|ue|ues)|"
+        r"anad(?:e|eme|ir|irlo|irla|elo|ela|elos|elas|a|as)|"
+        r"insert(?:a|ame|ar|arlo|arla|alo|ala|alos|alas|e|es)|"
+        r"registr(?:a|ame|ar|arlo|arla|alo|ala|alos|alas|e|es)|"
+        r"anot(?:a|ame|ar|alo|ala|e|es)|"
+        r"program(?:a|ame|ar|alo|ala|e|es)|"
+        r"cre(?:a|ar|ame|e|es)\s+(?:un\s+|unos\s+)?(?:nuev[oa]s?\s+)?(?:medicamentos?|tratamientos?|recordatorios?)|"
+        r"guard(?:a|ar|ame|e|es)\s+(?:(?:el|la|un|una|los|las|est[ea]s?)\s+)?(?:medicamentos?|tratamientos?|pastillas?|recetas?|en\s+(?:el|mi)\s+botiquin)|"
+        r"dame\s+de\s+alta|dar\s+de\s+alta|"
+        r"met(?:e|eme|er|a|as)\s+(?:a|al|en)\s+(?:el\s+|mi\s+)?botiquin|"
+        r"recuerd(?:a|ame|e|es)\s+tomar|recordar(?:me)?\s+tomar|"
+        r"nuev[oa]s?\s+(?:medicamentos?|medicinas?|tratamientos?|recordatorios?))\b",
+        qn,
+    )
+    if direct_verbs:
+        return True
+
+    pon_match = re.search(
+        r"\b(?:pon(?:me|er)?|ponga[ns]?)\s+(?:un\s+recordatorio|que\s+tomo|[a-záéíóú]+\s+\d+\s*(?:mg|ml|mcg|g|ui)|[a-záéíóú]+\s+cada\s+\d+|[a-z]+\s+en\s+(?:mi|el)\s+botiquin)",
+        qn,
+    )
+    return bool(pon_match)
+
+
+def _buscar_catalogo_inteligente(nombre: str):
+    direct = buscar_en_catalogo(nombre)
+    if direct:
+        return direct[0]
+
+    limpio = re.sub(
+        r"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui|%)\b", "", _normalizar_texto(nombre)
+    )
+    palabras = [
+        p
+        for p in re.findall(r"[a-z]{4,}", limpio)
+        if p not in _STOPWORDS_NOMBRE_MED
+    ]
+    for palabra in sorted(palabras, key=len, reverse=True):
+        candidatos = buscar_en_catalogo(palabra)
+        for item in candidatos:
+            if palabra in _normalizar_texto(item.nombre) or palabra in _normalizar_texto(
+                item.principio_activo
+            ):
+                return item
+    return None
+
+
+def _extraer_hora_primera_toma(seg: str) -> tuple[str | None, str]:
+    """Extrae una hora explícita ('HH:MM' 24h o 'Ahora') y devuelve (hora, segmento_limpio)."""
+    patron_hora = re.compile(
+        r"(?:a\s+las?|desde\s+las?|empezando\s+a\s+las?|iniciando\s+a\s+las?)\s+"
+        r"(\d{1,2})(?::(\d{2}))?\s*"
+        r"(?:(a\.?\s*m\.?|p\.?\s*m\.?|de\s+la\s+ma[nñ]ana|de\s+la\s+tarde|de\s+la\s+noche|hrs?|horas?)(?=\s|$|[,;.]))?",
+        re.IGNORECASE,
+    )
+    m = patron_hora.search(seg)
+    if m:
+        hh = int(m.group(1))
+        mm = int(m.group(2) or 0)
+        sufijo = _normalizar_texto(m.group(3) or "")
+        if "p" in sufijo or "tarde" in sufijo or "noche" in sufijo:
+            if "noche" in sufijo and hh == 12:
+                hh = 0
+            elif hh < 12:
+                hh += 12
+        elif ("a" in sufijo and "m" in sufijo or "manana" in sufijo) and hh == 12:
+            hh = 0
+        limpio = (seg[: m.start()] + " " + seg[m.end() :]).strip()
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            return f"{hh:02d}:{mm:02d}", limpio
+        return None, limpio
+
+    seg_norm = _normalizar_texto(seg)
+    if re.search(r"\b(ahora|ahorita|en este momento)\b", seg_norm):
+        return "Ahora", re.sub(r"\b(ahora|ahorita|en este momento)\b", "", seg, flags=re.IGNORECASE)
+    if re.search(r"\b(en ayunas|por la ma[nñ]ana|en la ma[nñ]ana)\b", seg_norm):
+        return "08:00", seg
+    if re.search(r"\b(por la noche|en la noche|antes de dormir)\b", seg_norm):
+        return "21:00", seg
+    return None, seg
+
+
+def _parsear_segmento_medicamento(seg: str) -> dict[str, Any] | None:
+    """Extrae campos clínicos de un fragmento en español."""
+    work = seg.strip(" :.-•*")
+    if not work:
+        return None
+
+    seg_norm = _normalizar_texto(work)
+
+    # 1. Instrucciones clínicas antes de limpiar
+    instrucciones = None
+    for pat, label in (
+        (r"\ben ayunas\b", "Tomar en ayunas con un vaso lleno de agua"),
+        (r"\b(?:despu[eé]s de (?:comer|los alimentos|desayunar|cenar)|con alimentos|con comida)\b", "Tomar después de los alimentos con agua"),
+        (r"\bantes de dormir\b", "Tomar antes de dormir con agua"),
+        (r"\bcon (?:abundante )?agua\b", "Tomar con abundante agua"),
+    ):
+        if re.search(pat, work, re.IGNORECASE):
+            instrucciones = label
+            work = re.sub(pat, " ", work, flags=re.IGNORECASE)
+            break
+
+    # 2. Frecuencia horaria
+    freq_horas = 8
+    freq_explicit = False
+    m_freq = re.search(r"\bcada\s+(\d+)\s*(?:h|hs|hrs|hora|horas)\b", work, re.IGNORECASE)
+    if m_freq:
+        freq_horas = max(1, min(168, int(m_freq.group(1))))
+        freq_explicit = True
+        work = (work[: m_freq.start()] + " " + work[m_freq.end() :]).strip()
+    else:
+        for pat, hrs in (
+            (r"\b(?:una|1)\s+vez\s+al\s+d[ií]a\b|\bdiari[oa](?:mente)?\b|\btodos los d[ií]as\b", 24),
+            (r"\b(?:dos|2)\s+veces\s+al\s+d[ií]a\b|\bma[nñ]ana y noche\b", 12),
+            (r"\b(?:tres|3)\s+veces\s+al\s+d[ií]a\b", 8),
+            (r"\b(?:cuatro|4)\s+veces\s+al\s+d[ií]a\b", 6),
+            (r"\b(?:por la ma[nñ]ana|en la ma[nñ]ana|por la noche|en la noche|antes de dormir|en ayunas)\b", 24),
+        ):
+            if re.search(pat, work, re.IGNORECASE):
+                freq_horas = hrs
+                freq_explicit = True
+                work = re.sub(pat, " ", work, flags=re.IGNORECASE)
+                break
+
+    # 3. Duración en días
+    duracion_dias: int | None = None
+    m_days = re.search(r"\b(?:por|durante)\s+(\d+)\s*d[ií]as?\b", work, re.IGNORECASE)
+    if m_days:
+        duracion_dias = max(1, min(365, int(m_days.group(1))))
+        work = (work[: m_days.start()] + " " + work[m_days.end() :]).strip()
+    else:
+        m_weeks = re.search(r"\b(?:por|durante)\s+(\d+|una)\s*semanas?\b", work, re.IGNORECASE)
+        if m_weeks:
+            raw_w = m_weeks.group(1).lower()
+            duracion_dias = 7 if raw_w == "una" else max(1, min(365, int(raw_w) * 7))
+            work = (work[: m_weeks.start()] + " " + work[m_weeks.end() :]).strip()
+        elif re.search(r"\bcr[oó]nico|permanente|indefinid[oa]\b", work, re.IGNORECASE):
+            work = re.sub(r"\bcr[oó]nico|permanente|indefinid[oa]\b", " ", work, flags=re.IGNORECASE)
+
+    # 4. Hora de primera toma
+    hora_primera_toma, work = _extraer_hora_primera_toma(work)
+    work = re.sub(r"\b(?:por la ma[nñ]ana|en la ma[nñ]ana|por la noche|en la noche)\b", " ", work, flags=re.IGNORECASE)
+
+    # 5. Cantidad / stock
+    cantidad_stock = 30
+    m_stock = re.search(
+        r"\b(?:con\s+)?(?:stock(?:\s+de)?|caja(?:\s+(?:de|con))?|frasco(?:\s+(?:de|con))?|tengo)\s+(\d+)\s*"
+        r"(?:tabletas?|comprimidos?|pastillas?|c[aá]psulas?|unidades?|ampollas?|sobres?|ml|dosis)?\b"
+        r"|\bcon\s+(\d+)\s+(?:tabletas?|comprimidos?|pastillas?|c[aá]psulas?|unidades?|ampollas?|sobres?)\b",
+        work,
+        re.IGNORECASE,
+    )
+    if m_stock:
+        raw_stk = m_stock.group(1) or m_stock.group(2)
+        if raw_stk:
+            cantidad_stock = max(1, min(500, int(raw_stk)))
+        work = (work[: m_stock.start()] + " " + work[m_stock.end() :]).strip()
+
+    # 6. Forma farmacéutica por pistas en el texto
+    forma_hint = None
+    if any(k in seg_norm for k in ("gota", "jarabe", "ml")):
+        forma_hint = "gotas"
+    elif any(k in seg_norm for k in ("ampolla", "inyec", "jeringa", "insulina", "ui")):
+        forma_hint = "inyectable"
+
+    # 7. Dosis (priorizar concentración mg/ml/mcg/g/ui, si no cantidad de tabletas)
+    dosis: str | None = None
+    dose_explicit = False
+    m_conc = re.search(r"\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ml|ui)\b", work, re.IGNORECASE)
+    if m_conc:
+        dosis = f"{m_conc.group(1).replace(',', '.')} {m_conc.group(2).lower() if m_conc.group(2).lower() != 'ui' else 'UI'}"
+        dose_explicit = True
+        work = (work[: m_conc.start()] + " " + work[m_conc.end() :]).strip()
+    else:
+        m_units = re.search(
+            r"\b(\d+(?:[.,]\d+)?)\s*(tabletas?|comprimidos?|c[aá]psulas?|gotas?|ampollas?|puff|sobres?)\b",
+            work,
+            re.IGNORECASE,
+        )
+        if m_units:
+            dosis = f"{m_units.group(1)} {m_units.group(2).lower()}"
+            dose_explicit = True
+            work = (work[: m_units.start()] + " " + work[m_units.end() :]).strip()
+
+    # 8. Limpiar palabras de presentación / relleno para aislar el nombre del medicamento
+    work = re.sub(
+        r"\b(?:de|para|con|en|por|cada|y|e|un|una|el|la|los|las|nuev[oa]s?|medicamentos?|medicinas?|pastillas?|tabletas?|comprimidos?|c[aá]psulas?|recordatorios?|llamad[oa]s?|tomar)\b",
+        " ",
+        work,
+        flags=re.IGNORECASE,
+    )
+    nombre_limpio = re.sub(r"\s+", " ", work).strip(" ,.;:-•*")
+    palabras_utiles = [
+        p for p in re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+", nombre_limpio)
+        if _normalizar_texto(p) not in _STOPWORDS_NOMBRE_MED
+    ]
+    if not any(len(p) >= 3 and any(c.isalpha() for c in p) for p in palabras_utiles):
+        return None
+
+    return {
+        "nombre": " ".join(palabras_utiles).title(),
+        "dosis": dosis,
+        "_dose_explicit": dose_explicit,
+        "frecuencia_horas": freq_horas,
+        "_freq_explicit": freq_explicit,
+        "duracion_dias": duracion_dias,
+        "hora_primera_toma": hora_primera_toma,
+        "cantidad_stock": cantidad_stock,
+        "forma_farmaceutica": forma_hint,
+        "instrucciones": instrucciones,
+    }
+
+
+def _parsear_medicamentos_desde_texto(query: str) -> list[dict[str, Any]]:
+    """Extrae uno o varios medicamentos desde una instrucción libre en español."""
+    limpio = query.strip()
+    # Quitar saludo/verbo de acción al principio
+    limpio = re.sub(
+        r"^(?:hola\s*,?\s*)?(?:medi\s*,?\s*)?(?:por\s+favor\s*,?\s*)?"
+        r"(?:me\s+)?(?:(?:puedes|podr[ií]as|quiero|necesito|quisiera|ay[uú]dame\s+a|favor\s+de)(?:\s+que)?\s*)?"
+        r"(?:me\s+)?(?:agregar?(?:me|los|las|lo|la)?|agregues?|a[nñ]ad(?:e|eme|ir|irlo|irla|a|as)|anad(?:e|eme|ir|a|as)|"
+        r"insert(?:a|ame|ar|arlo|arla|e|es)|registr(?:a|ame|ar|arlo|arla|e|es)|cre(?:a|ame|ar|e|es)|anot(?:a|ame|ar|e|es)|"
+        r"guard(?:a|ame|ar|e|es)|program(?:a|ame|ar|e|es)|pon(?:me|er)?|ponga[ns]?|recu[eé]rd(?:a|ame|e|es)\s+tomar|recordar(?:me)?\s+tomar|"
+        r"dame\s+de\s+alta|dar\s+de\s+alta|m[eé]t(?:e|eme|a|as)(?:\s+en\s+(?:el|mi)\s+botiqu[ií]n)?)\s*",
+        "",
+        limpio,
+        flags=re.IGNORECASE,
+    ).strip()
+    for _ in range(2):
+        limpio = re.sub(
+            r"^(?:los?\s+siguientes?\s+|estos?\s+|un\s+|una\s+|el\s+|la\s+|que\s+tomo\s+|\d+\s+|dos\s+|tres\s+)?"
+            r"(?:nuev[oa]s?\s+)?(?:medicamentos?|medicinas?|tratamientos?|pastillas?|recordatorios?)\s*"
+            r"(?:llamad[oa]s?\s+|de\s+|para\s+)?[:\-]?\s*",
+            "",
+            limpio,
+            flags=re.IGNORECASE,
+        ).strip()
+    limpio = re.sub(
+        r",?\s*(?:a\s+mi\s+botiqu[ií]n|en\s+mi\s+botiqu[ií]n|en\s+la\s+app|por\s+favor|gracias|medi)\.?\s*$",
+        "",
+        limpio,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    if not limpio:
+        return []
+
+    # Proteger frases como "mañana y noche" o "mañana y tarde" antes de dividir múltiples fármacos
+    protegido = re.sub(r"\bma([nñ])ana\s+y\s+(noche|tarde)\b", r"ma\1ana __Y__ \2", limpio, flags=re.IGNORECASE)
+    trozos = re.split(
+        r"(?:\n+|;|,(?!\s*\d)|\s+(?:y\s+tambi[eé]n|y\s+adem[aá]s|y|e)\s+)",
+        protegido,
+        flags=re.IGNORECASE,
+    )
+
+    resultados: list[dict[str, Any]] = []
+    for trozo in trozos:
+        restaurado = trozo.replace("__Y__", "y").strip()
+        item = _parsear_segmento_medicamento(restaurado)
+        if item is not None:
+            resultados.append(item)
+    return resultados
+
+
+def _extraer_medicamentos_con_ollama(
+    query: str,
+    ctx: dict[str, Any],
+    base_url: str,
+    chosen_model: str,
+) -> list[dict[str, Any]]:
+    prompt_obj = {
+        "modo": "extraer_medicamentos_chat",
+        "consulta": query.strip(),
+        "alergias_paciente": ctx["alergias"],
+        "medicamentos_actuales": ctx["medicamentos_activos"],
+        "instruccion_formato": (
+            "El usuario pidió agregar uno o más medicamentos a MedReminder AI. "
+            "Responde ÚNICAMENTE con un objeto JSON válido con clave 'medicamentos' (lista de objetos). "
+            "Cada objeto debe tener: nombre (string), principio_activo (string), dosis (string o null), "
+            "frecuencia_horas (entero o null), duracion_dias (entero o null), "
+            "hora_primera_toma ('HH:MM' 24h o 'Ahora' o null), cantidad_stock (entero o null), "
+            "forma_farmaceutica ('comprimidos'|'gotas'|'inyectable'), color_sugerido (string), "
+            "instrucciones (string), proposito (string), es_critico (bool). "
+            "Si el usuario no especificó ningún nombre concreto de medicamento, responde {'medicamentos': []}."
+        ),
+    }
+    body = json.dumps(
+        {
+            "model": chosen_model,
+            "format": "json",
+            "stream": False,
+            "keep_alive": "30m",
+            "options": {"temperature": 0.1, "num_predict": 420},
+            "messages": [{"role": "user", "content": json.dumps(prompt_obj, ensure_ascii=False)}],
+        }
+    ).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            f"{base_url}/api/chat",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=18.0) as resp:
+            raw_resp = json.loads(resp.read().decode("utf-8"))
+            parsed = _extraer_json_seguro(raw_resp.get("message", {}).get("content", ""))
+            raw_list = (parsed or {}).get("medicamentos") if isinstance(parsed, dict) else None
+            if not isinstance(raw_list, list):
+                return []
+
+            query_tokens = {
+                t for t in re.findall(r"[a-z]{4,}", _normalizar_texto(query))
+                if t not in _STOPWORDS_NOMBRE_MED
+            }
+            validos: list[dict[str, Any]] = []
+            for raw in raw_list[:8]:
+                if not isinstance(raw, dict):
+                    continue
+                nombre = str(raw.get("nombre") or "").strip()
+                pa_raw = str(raw.get("principio_activo") or "").strip()
+                nombre_norm = _normalizar_texto(nombre)
+                comb_norm = f"{nombre_norm} {_normalizar_texto(pa_raw)}".strip()
+                if not nombre or nombre_norm in _STOPWORDS_NOMBRE_MED:
+                    continue
+                tokens_med = set(re.findall(r"[a-z]{4,}", comb_norm))
+                if query_tokens and not (tokens_med & query_tokens):
+                    # Verificar coincidencia parcial (ej. "amoxi" vs "amoxicilina")
+                    if not any(qt in comb_norm or nt in _normalizar_texto(query) for qt in query_tokens for nt in tokens_med):
+                        continue
+                dosis_raw = raw.get("dosis")
+                freq_raw = raw.get("frecuencia_horas")
+                validos.append(
+                    {
+                        "nombre": nombre,
+                        "principio_activo": str(raw.get("principio_activo") or "").strip(),
+                        "dosis": str(dosis_raw).strip() if dosis_raw else None,
+                        "_dose_explicit": bool(dosis_raw),
+                        "frecuencia_horas": int(freq_raw) if isinstance(freq_raw, (int, float)) and 1 <= int(freq_raw) <= 168 else None,
+                        "_freq_explicit": isinstance(freq_raw, (int, float)),
+                        "duracion_dias": int(raw["duracion_dias"]) if isinstance(raw.get("duracion_dias"), (int, float)) and int(raw["duracion_dias"]) > 0 else None,
+                        "hora_primera_toma": str(raw.get("hora_primera_toma")).strip() if raw.get("hora_primera_toma") else None,
+                        "cantidad_stock": int(raw["cantidad_stock"]) if isinstance(raw.get("cantidad_stock"), (int, float)) and int(raw["cantidad_stock"]) > 0 else None,
+                        "forma_farmaceutica": raw.get("forma_farmaceutica"),
+                        "color_sugerido": raw.get("color_sugerido"),
+                        "instrucciones": raw.get("instrucciones"),
+                        "proposito": raw.get("proposito"),
+                        "es_critico": raw.get("es_critico"),
+                    }
+                )
+            return validos
+    except Exception as exc:
+        logger.warning("Fallo extracción de medicamentos con Ollama (%s), usando parser determinista", exc)
+        return []
+
+
+def _enriquecer_item_chat(
+    raw_item: dict[str, Any],
+    fallback_item: dict[str, Any] | None,
+    db: Session | None,
+    user: Usuario | None,
+) -> AiChatMedicationActionItem:
+    merged = dict(raw_item)
+    if fallback_item:
+        if not merged.get("hora_primera_toma"):
+            merged["hora_primera_toma"] = fallback_item.get("hora_primera_toma")
+        if merged.get("duracion_dias") is None:
+            merged["duracion_dias"] = fallback_item.get("duracion_dias")
+        if merged.get("cantidad_stock") is None:
+            merged["cantidad_stock"] = fallback_item.get("cantidad_stock")
+        if not merged.get("dosis") and fallback_item.get("dosis"):
+            merged["dosis"] = fallback_item["dosis"]
+            merged["_dose_explicit"] = fallback_item.get("_dose_explicit", False)
+        if not merged.get("frecuencia_horas") and fallback_item.get("frecuencia_horas"):
+            merged["frecuencia_horas"] = fallback_item["frecuencia_horas"]
+            merged["_freq_explicit"] = fallback_item.get("_freq_explicit", False)
+
+    raw_name = str(merged.get("nombre") or "Medicamento").strip()
+    top_cat = _buscar_catalogo_inteligente(raw_name)
+
+    dosis = merged.get("dosis")
+    if not dosis:
+        dosis = top_cat.dosis_sugerida if top_cat else "1 comprimido"
+    dosis_str = str(dosis).strip()
+
+    # Evitar duplicar dosis en el nombre si ya la contiene
+    base_name = top_cat.nombre if top_cat else raw_name
+    if top_cat and merged.get("_dose_explicit") and _normalizar_texto(dosis_str) not in _normalizar_texto(top_cat.nombre):
+        nombre_sin_dosis = re.sub(r"\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui).*$", "", top_cat.nombre, flags=re.IGNORECASE).strip()
+        display_name = f"{nombre_sin_dosis} {dosis_str}"
+    elif not top_cat and merged.get("_dose_explicit") and _normalizar_texto(dosis_str) not in _normalizar_texto(base_name):
+        display_name = f"{base_name} {dosis_str}"
+    else:
+        display_name = base_name
+
+    pa = str(
+        merged.get("principio_activo")
+        or (top_cat.principio_activo if top_cat else re.sub(r"\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|ug|g|ml|ui).*$", "", display_name, flags=re.IGNORECASE).strip())
+    )
+
+    freq = merged.get("frecuencia_horas")
+    if not freq:
+        freq = 12 if (top_cat and "12" in (top_cat.instrucciones_sugeridas or "")) else 8
+    freq_int = max(1, min(168, int(freq)))
+
+    forma = _normalizar_forma(
+        merged.get("forma_farmaceutica") or (top_cat.forma_sugerida if top_cat else "comprimidos")
+    )
+    color = str(
+        merged.get("color_sugerido") or (top_cat.color_sugerido if top_cat else "blanco")
+    ).lower()
+    instrucciones = str(
+        merged.get("instrucciones")
+        or (top_cat.instrucciones_sugeridas if top_cat else "Tomar con abundante agua")
+    )[:250]
+    proposito = str(
+        merged.get("proposito")
+        or (top_cat.proposito if top_cat else "Registrado mediante Medi IA")
+    )[:120]
+    contraindicaciones = top_cat.contraindicaciones if top_cat else None
+    es_critico = bool(
+        merged["es_critico"]
+        if merged.get("es_critico") is not None
+        else (top_cat.es_critico_defecto if top_cat else False)
+    )
+    stock = int(merged.get("cantidad_stock") or 30)
+    stock = max(1, min(500, stock))
+
+    alerta_alergia = None
+    alerta_interaccion = None
+    if db is not None and user is not None:
+        verif = verificar_alergias_paciente(
+            db=db,
+            id_usuario=user.id_usuario,
+            nombre=display_name,
+            principio_activo=pa,
+        )
+        if verif.tiene_conflicto:
+            alerta_alergia = verif.alerta
+        if verif.tiene_interaccion:
+            alerta_interaccion = verif.alerta_interaccion
+
+    return AiChatMedicationActionItem(
+        nombre=display_name[:255],
+        principio_activo=pa[:255],
+        dosis=dosis_str[:100],
+        frecuencia_horas=freq_int,
+        duracion_dias=merged.get("duracion_dias"),
+        hora_primera_toma=merged.get("hora_primera_toma"),
+        cantidad_stock=stock,
+        forma_farmaceutica=forma[:40],
+        color_pastilla=color[:40],
+        instrucciones_toma=instrucciones,
+        proposito=proposito,
+        contraindicaciones=contraindicaciones,
+        es_critico=es_critico,
+        permite_posponer=not es_critico,
+        alerta_alergia=alerta_alergia,
+        alerta_interaccion=alerta_interaccion,
+        creado_en_bd=False,
+    )
+
+
+def _aplicar_alertas_lote(items: list[AiChatMedicationActionItem]) -> None:
+    """Detecta duplicidades o interacciones farmacológicas entre medicamentos del mismo lote."""
+    if len(items) < 2:
+        return
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            a, b = items[i], items[j]
+            pa_a = _normalizar_texto(a.principio_activo)
+            pa_b = _normalizar_texto(b.principio_activo)
+            if pa_a and pa_a == pa_b:
+                msg = f"DUPLICIDAD EN LOTE: '{a.nombre}' y '{b.nombre}' comparten principio activo ({a.principio_activo})."
+                if not b.alerta_interaccion:
+                    b.alerta_interaccion = msg
+                continue
+            txt_a = _normalizar_texto(f"{a.nombre} {a.principio_activo}")
+            txt_b = _normalizar_texto(f"{b.nombre} {b.principio_activo}")
+            for grupo_a, grupo_b, explicacion in REGLAS_INTERACCIONES:
+                in_ab = any(re.search(rf"\b{re.escape(m)}\b", txt_a) for m in grupo_a) and any(
+                    re.search(rf"\b{re.escape(m)}\b", txt_b) for m in grupo_b
+                )
+                in_ba = any(re.search(rf"\b{re.escape(m)}\b", txt_b) for m in grupo_a) and any(
+                    re.search(rf"\b{re.escape(m)}\b", txt_a) for m in grupo_b
+                )
+                if in_ab or in_ba:
+                    msg = f"INTERACCIÓN ENTRE FÁRMACOS DEL COMANDO ('{a.nombre}' + '{b.nombre}'): {explicacion}"
+                    if not a.alerta_interaccion:
+                        a.alerta_interaccion = msg
+                    if not b.alerta_interaccion:
+                        b.alerta_interaccion = msg
+
+
+def _calcular_fechas_tratamiento_utc(
+    hora_primera_toma: str | None,
+    duracion_dias: int | None,
+    tz_offset_minutes: int | None,
+    ahora_utc: datetime,
+) -> tuple[datetime, datetime | None]:
+    fecha_inicio = ahora_utc.replace(microsecond=0)
+    if hora_primera_toma:
+        m = re.match(r"^(\d{1,2}):(\d{2})$", hora_primera_toma.strip())
+        if m:
+            hh, mm = int(m.group(1)), int(m.group(2))
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                offset = tz_offset_minutes if tz_offset_minutes is not None else 0
+                local_now = ahora_utc + timedelta(minutes=offset)
+                local_target = datetime.combine(local_now.date(), time(hh, mm))
+                fecha_inicio = (local_target - timedelta(minutes=offset)).replace(microsecond=0)
+
+    fecha_fin = None
+    if duracion_dias is not None and duracion_dias > 0:
+        fecha_fin = fecha_inicio + timedelta(days=duracion_dias)
+    return fecha_inicio, fecha_fin
+
+
+def _persistir_medicamentos_chat(
+    db: Session,
+    user: Usuario,
+    items: list[AiChatMedicationActionItem],
+    tz_offset_minutes: int | None = None,
+) -> list[AiChatMedicationActionItem]:
+    """Crea Medicamento, Tratamiento activo y Recordatorios iniciales en una transacción."""
+    ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    creados: list[AiChatMedicationActionItem] = []
+
+    for item in items:
+        forma = _normalizar_forma(item.forma_farmaceutica)
+        stock = max(1, min(500, item.cantidad_stock))
+        freq = max(1, min(168, item.frecuencia_horas))
+        fecha_inicio, fecha_fin = _calcular_fechas_tratamiento_utc(
+            item.hora_primera_toma,
+            item.duracion_dias,
+            tz_offset_minutes,
+            ahora_utc,
+        )
+
+        med = Medicamento(
+            id_usuario=user.id_usuario,
+            nombre=item.nombre.strip()[:255],
+            principio_activo=(item.principio_activo or "").strip()[:255] or None,
+            dosis=(item.dosis or "1 comprimido").strip()[:100],
+            cantidad_stock=stock,
+            stock_inicial=max(stock, 30),
+            forma_farmaceutica=forma,
+            color_pastilla=(item.color_pastilla or "blanco")[:40],
+            instrucciones_toma=(item.instrucciones_toma or "Tomar con abundante agua")[:255],
+            proposito=(item.proposito or "Registrado por Medi IA")[:120],
+            permite_posponer=bool(item.permite_posponer and not item.es_critico),
+            es_critico=bool(item.es_critico),
+            contraindicaciones=item.contraindicaciones,
+        )
+        db.add(med)
+        db.flush()
+        db.refresh(med)
+
+        trat = Tratamiento(
+            id_medicamento=med.id_medicamento,
+            frecuencia_horas=freq,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            estado="activo",
+        )
+        db.add(trat)
+        db.flush()
+        db.refresh(trat)
+
+        recs = generar_recordatorios(trat, ahora=ahora_utc)
+        db.add_all(recs)
+
+        actualizado = item.model_copy(
+            update={
+                "id_medicamento": med.id_medicamento,
+                "id_tratamiento": trat.id_tratamiento,
+                "forma_farmaceutica": forma,
+                "cantidad_stock": stock,
+                "frecuencia_horas": freq,
+                "creado_en_bd": True,
+            }
+        )
+        creados.append(actualizado)
+
+    db.commit()
+    invalidar_cache_horizonte(user.id_usuario)
+
+    for item in creados:
+        registrar_evento_mongo(
+            evento="medicamento_creado",
+            id_usuario=user.id_usuario,
+            detalle={
+                "origen": "medi_chat_ia",
+                "id_medicamento": item.id_medicamento,
+                "id_tratamiento": item.id_tratamiento,
+                "nombre": item.nombre,
+                "dosis": item.dosis,
+                "frecuencia_horas": item.frecuencia_horas,
+            },
+        )
+    return creados
+
+
+def confirmar_medicamentos_chat(
+    medicamentos: list[AiChatMedicationActionItem],
+    db: Session,
+    user: Usuario,
+    tz_offset_minutes: int | None = None,
+) -> AiChatResponse:
+    """Confirma y persiste medicamentos propuestos por Medi tras advertencia clínica."""
+    creados = _persistir_medicamentos_chat(db, user, medicamentos, tz_offset_minutes)
+    nombres = ", ".join(m.nombre for m in creados)
+    paciente = (user.nombre_completo.split(" ")[0] if user.nombre_completo else "Paciente")
+    points = [
+        AiDossierPoint(
+            label=f"{m.nombre} ({m.dosis})",
+            description=f"Programado cada {m.frecuencia_horas}h · Stock inicial: {m.cantidad_stock}.",
+            icon_type="check",
+        )
+        for m in creados[:4]
+    ]
+    return AiChatResponse(
+        title="Medicamentos Confirmados e Insertados",
+        category="Registro en Botiquín",
+        risk_level="Moderado",
+        risk_score=0.45,
+        key_insight=f"¡Listo, {paciente}! Registré {nombres} bajo tu confirmación explícita y activé sus recordatorios.",
+        points=points,
+        golden_rule="Sigue estrictamente la supervisión médica si recibiste alertas de alergia o interacción.",
+        full_voice_script=f"Listo {paciente}, agregué {nombres} a tu botiquín y activé tus recordatorios.",
+        model_used="medi-clinico",
+        using_ollama=False,
+        action_performed="inserted_medications",
+        medications_affected=creados,
+    )
+
+
+def _procesar_insercion_medicamentos_chat(
+    query: str,
+    db: Session | None,
+    user: Usuario | None,
+    ctx: dict[str, Any],
+    base_url: str | None,
+    chosen_model: str,
+    tz_offset_minutes: int | None,
+) -> AiChatResponse:
+    paciente = ctx.get("paciente") or "Paciente"
+    text_items = _parsear_medicamentos_desde_texto(query)
+    ollama_items = (
+        _extraer_medicamentos_con_ollama(query, ctx, base_url, chosen_model)
+        if base_url
+        else []
+    )
+    using_ollama = bool(base_url and ollama_items)
+
+    raw_candidates: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
+    if ollama_items:
+        for idx, oi in enumerate(ollama_items):
+            fb = text_items[idx] if idx < len(text_items) else (text_items[0] if len(text_items) == 1 else None)
+            raw_candidates.append((oi, fb))
+    else:
+        for ti in text_items:
+            raw_candidates.append((ti, None))
+
+    if not raw_candidates:
+        return AiChatResponse(
+            title="¿Qué medicamento quieres agregar?",
+            category="Asistente de Registro",
+            risk_level="Informativo",
+            risk_score=0.15,
+            key_insight=f"{paciente}, dime el nombre del medicamento, su dosis y cada cuántas horas lo tomas para registrarlo por ti.",
+            points=[
+                AiDossierPoint(
+                    label="Ejemplo por texto o voz",
+                    description="Di o escribe: 'Agrega Paracetamol 500 mg cada 8 horas por 5 días'.",
+                    icon_type="info",
+                ),
+                AiDossierPoint(
+                    label="Hora y stock opcionales",
+                    description="También puedes decir: 'Inserta Losartán 50 mg cada 12 horas a las 8:00 AM con 30 tabletas'.",
+                    icon_type="schedule",
+                ),
+            ],
+            golden_rule="Indica al menos el nombre del medicamento para que pueda insertarlo en tu botiquín.",
+            full_voice_script=f"{paciente}, dime el nombre del medicamento, su dosis y cada cuántas horas debes tomarlo para agregarlo a tu botiquín.",
+            model_used=chosen_model,
+            using_ollama=bool(base_url),
+            action_performed="needs_medication_details",
+            medications_affected=[],
+        )
+
+    enriquecidos = [
+        _enriquecer_item_chat(raw, fb, db, user)
+        for raw, fb in raw_candidates[:6]
+    ]
+    _aplicar_alertas_lote(enriquecidos)
+
+    if db is None or user is None:
+        return AiChatResponse(
+            title="Inicia sesión para guardar en tu Botiquín",
+            category="Asistente de Registro",
+            risk_level="Informativo",
+            risk_score=0.2,
+            key_insight=f"Detecté {', '.join(m.nombre for m in enriquecidos)}, pero necesitas iniciar sesión para guardarlo en tu cuenta.",
+            points=[
+                AiDossierPoint(
+                    label=m.nombre,
+                    description=f"Dosis: {m.dosis} · Cada {m.frecuencia_horas}h.",
+                    icon_type="info",
+                )
+                for m in enriquecidos
+            ],
+            golden_rule="Tus medicamentos quedan resguardados de forma privada en tu cuenta.",
+            full_voice_script="Necesitas iniciar sesión para guardar el medicamento en tu cuenta.",
+            model_used=chosen_model,
+            using_ollama=using_ollama,
+            action_performed="auth_required",
+            medications_affected=enriquecidos,
+        )
+
+    # Regla 1 y Regla 4: si hay alerta de alergia o interacción/duplicidad, pedir confirmación explícita
+    alertas = [m for m in enriquecidos if m.alerta_alergia or m.alerta_interaccion]
+    if alertas:
+        es_alergia = any(m.alerta_alergia for m in alertas)
+        points = []
+        for m in enriquecidos[:4]:
+            motivo = m.alerta_alergia or m.alerta_interaccion or f"Sin conflicto detectado · Dosis {m.dosis} cada {m.frecuencia_horas}h"
+            points.append(
+                AiDossierPoint(
+                    label=f"{m.nombre} ({'Alerta Clínica' if (m.alerta_alergia or m.alerta_interaccion) else 'Listo'})",
+                    description=motivo[:240],
+                    icon_type="warning" if (m.alerta_alergia or m.alerta_interaccion) else "check",
+                )
+            )
+        nombres_alert = ", ".join(m.nombre for m in alertas)
+        return AiChatResponse(
+            title="Alerta de Seguridad antes de Insertar",
+            category="Farmacovigilancia IA",
+            risk_level="Crítico" if es_alergia else "Alto",
+            risk_score=0.92 if es_alergia else 0.78,
+            key_insight=(
+                f"¡Atención, {paciente}! Detecté una alerta de seguridad con {nombres_alert}. "
+                "No lo inserté automáticamente; confirma solo si tu médico lo autorizó."
+            ),
+            points=points,
+            golden_rule="Regla Clínica: Verifica alergias e interacciones antes de iniciar un nuevo fármaco.",
+            full_voice_script=(
+                f"Atención {paciente}, detecté una alerta médica al revisar {nombres_alert}. "
+                "Por tu seguridad no lo guardé todavía. Revisa la alerta en pantalla y confirma solo si deseas registrarlo bajo supervisión."
+            ),
+            model_used=chosen_model,
+            using_ollama=using_ollama,
+            action_performed="confirm_medications",
+            medications_affected=enriquecidos,
+        )
+
+    creados = _persistir_medicamentos_chat(db, user, enriquecidos, tz_offset_minutes)
+    nombres = ", ".join(m.nombre for m in creados)
+    points = [
+        AiDossierPoint(
+            label=f"{m.nombre} ({m.dosis})",
+            description=(
+                f"Cada {m.frecuencia_horas}h · Stock: {m.cantidad_stock}"
+                + (f" · Inicio: {m.hora_primera_toma}" if m.hora_primera_toma else "")
+                + (f" · {m.duracion_dias} días" if m.duracion_dias else "")
+            ),
+            icon_type="check",
+        )
+        for m in creados[:4]
+    ]
+    return AiChatResponse(
+        title="Medicamento Insertado" if len(creados) == 1 else f"{len(creados)} Medicamentos Insertados",
+        category="Acción Medi · Botiquín",
+        risk_level="Informativo",
+        risk_score=0.15,
+        key_insight=f"¡Listo, {paciente}! Agregué {nombres} a tu botiquín y generé tus recordatorios automáticos.",
+        points=points,
+        golden_rule="Validación de alergias e interacciones aprobada. Tus alarmas ya están activas.",
+        full_voice_script=f"¡Listo {paciente}! Ya inserté {nombres} en tu botiquín y activé tus recordatorios automáticamente.",
+        model_used=chosen_model,
+        using_ollama=using_ollama,
+        action_performed="inserted_medications",
+        medications_affected=creados,
+    )
+
+
 def consultar_medi_ollama(
     query: str,
     db: Session | None = None,
     user: Usuario | None = None,
     fallback_name: str = "Paciente",
+    tz_offset_minutes: int | None = None,
 ) -> AiChatResponse:
-    """Consulta el modelo entrenado `medi-clinico` en Ollama con el contexto real del paciente."""
+    """Consulta el modelo entrenado `medi-clinico` en Ollama con el contexto real del paciente.
+    Si el usuario solicita insertar medicamentos, los valida e inserta en MySQL + agenda."""
     ctx = _construir_contexto_paciente(db, user, fallback_name)
     base_url, chosen_model, _ = _resolve_ollama_endpoint(timeout=1.8)
+
+    if _es_intencion_insertar_medicamento(query):
+        return _procesar_insercion_medicamentos_chat(
+            query=query,
+            db=db,
+            user=user,
+            ctx=ctx,
+            base_url=base_url,
+            chosen_model=chosen_model,
+            tz_offset_minutes=tz_offset_minutes,
+        )
 
     if not base_url:
         return _fallback_dossier_clinico(query, ctx)
